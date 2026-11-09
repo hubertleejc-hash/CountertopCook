@@ -204,6 +204,7 @@ final class CountertopCookUITests: XCTestCase {
         let second = vertical ? window.maxX - hinge.maxX : window.maxY - hinge.maxY
         XCTAssertEqual(first, second, accuracy: (vertical ? window.width : window.height) * 0.1,
                        "The split around the hinge is not 50/50 in \(name): \(hinge) in \(window)")
+        checkEqualCards(name, sideBySide: vertical)
         // Nothing tappable on the hinge.
         for button in app.buttons.allElementsBoundByIndex where button.exists && button.isHittable {
             XCTAssertFalse(button.frame.intersects(hinge),
@@ -272,6 +273,18 @@ final class CountertopCookUITests: XCTestCase {
             XCTAssertFalse(button.frame.intersects(centreLine),
                            "Button '\(button.label)' sits on the centre line in \(name): \(button.frame)")
         }
+        if wide { checkEqualCards(name, sideBySide: true) }
+    }
+
+    /// Side by side, the recipe and timers cards must be the same width (top and bottom, the
+    /// same height), whatever the status bar or camera takes from one edge.
+    private func checkEqualCards(_ name: String, sideBySide: Bool) {
+        let recipe = element("recipeCard").frame, timers = element("timersCard").frame
+        XCTAssertFalse(recipe.isEmpty || timers.isEmpty, "Cards not found in \(name)")
+        let sizes = sideBySide ? (recipe.width, timers.width) : (recipe.height, timers.height)
+        print("CARDS: \(name) recipe=\(recipe) timers=\(timers)")
+        XCTAssertEqual(sizes.0, sizes.1, accuracy: 2,
+                       "Recipe and timers cards differ in size in \(name): \(recipe) vs \(timers)")
     }
 
     /// Takes a screenshot and checks every Cook Mode control and both timers are on screen,

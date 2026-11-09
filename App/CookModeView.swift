@@ -14,6 +14,7 @@ func ingredientLine(_ item: Ingredient, servingsFrom base: Int, to servings: Int
 /// - Otherwise, wide (landscape, iPad): recipe left, timers right, 50/50.
 /// - Otherwise, tall (closed Duo, portrait phone): recipe step on top, timers below, 50/50.
 /// Off the Duo split, a clear gap runs down the middle so no button sits on the centre line.
+/// One cream page runs under both cards and the gap; the two cards are always the same size.
 struct CookModeView: View {
     let recipe: Recipe
     @Environment(TimerStore.self) private var timers
@@ -43,7 +44,8 @@ struct CookModeView: View {
             }
         }
         .background(alignment: .topLeading) { HingeProbe(posture: $fold) }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Theme.background.ignoresSafeArea())
+        .environment(\.colorScheme, .light)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .alert("Timer done", isPresented: Binding(
@@ -67,13 +69,15 @@ struct CookModeView: View {
                         recipePane(compact: pane.size.height < 500 || pane.size.width < 320)
                             .padding(margin)
                     }
-                    .environment(timers),
+                    .environment(timers)
+                    .environment(\.colorScheme, .light),
                     secondary: GeometryReader { pane in
                         TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
                                    dense: pane.size.height - 2 * margin < Self.densePaneHeight)
                             .padding(margin)
                     }
                     .environment(timers)
+                    .environment(\.colorScheme, .light)
                 )
                 .ignoresSafeArea(.container)
             )
@@ -96,24 +100,26 @@ struct CookModeView: View {
             let wide = size.width > size.height && size.width >= 560
             let compact = wide ? size.height < 500 : size.width < 500
             if wide {
+                // Both cards get the width of the narrower side, so a status bar or camera inset
+                // on one edge doesn't make one card thinner. They stay centred on the middle.
+                let cardWidth = max(0, size.width / 2 - half - max(insets.leading, insets.trailing) - margin)
                 HStack(spacing: 0) {
                     recipePane(compact: compact)
-                        .frame(width: max(0, size.width / 2 - half - insets.leading - margin))
-                        .padding(.leading, insets.leading + margin)
-                    HingeGap(vertical: true).frame(width: Self.hingeGap)
+                        .frame(width: cardWidth)
+                    HingeGap().frame(width: Self.hingeGap)
                     TimersPane(compact: compact,
                                dense: size.height - insets.top - insets.bottom - 2 * margin < Self.densePaneHeight)
-                        .frame(width: max(0, size.width / 2 - half - insets.trailing - margin))
-                        .padding(.trailing, insets.trailing + margin)
+                        .frame(width: cardWidth)
                 }
                 .padding(.top, insets.top + margin)
                 .padding(.bottom, insets.bottom + margin)
+                .frame(width: size.width)
             } else {
                 VStack(spacing: 0) {
                     recipePane(compact: compact)
                         .frame(height: max(0, size.height / 2 - half - insets.top - margin))
                         .padding(.top, insets.top + margin)
-                    HingeGap(vertical: false).frame(height: Self.hingeGap)
+                    HingeGap().frame(height: Self.hingeGap)
                     let timersHeight = max(0, size.height / 2 - half - insets.bottom - margin)
                     TimersPane(compact: compact, dense: timersHeight < Self.densePaneHeight)
                         .frame(height: timersHeight)
@@ -137,14 +143,16 @@ struct CookModeView: View {
         return VStack(spacing: compact ? 8 : 14) {
             header
             ProgressView(value: Double(min(stepIndex + 1, max(steps.count, 1))), total: Double(max(steps.count, 1)))
-                .tint(.orange)
+                .tint(Theme.accent)
                 .scaleEffect(x: 1, y: 2, anchor: .center)
                 .accessibilityIdentifier("stepProgress")
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(step?.text ?? "This recipe has no steps yet.")
-                        .font(.system(size: compact ? 26 : 38, weight: .semibold, design: .rounded))
+                        .font(Theme.step)
+                        .lineSpacing(Theme.stepLineSpacing)
+                        .foregroundStyle(Theme.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("stepText")
@@ -157,8 +165,7 @@ struct CookModeView: View {
                                 .font(.title3.bold())
                                 .frame(maxWidth: .infinity, minHeight: 50)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
+                        .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
                         .accessibilityIdentifier("startStepTimer")
                     }
 
@@ -170,12 +177,14 @@ struct CookModeView: View {
             navigationButtons(compact: compact)
         }
         .padding(compact ? 12 : 20)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay {
             if finished {
                 finishedOverlay
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("recipeCard")
     }
 
     private var header: some View {
@@ -187,16 +196,19 @@ struct CookModeView: View {
                     .font(.title3.bold())
                     .frame(width: 44, height: 44)
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
+            .buttonStyle(SoftButtonStyle(circle: true))
             .accessibilityLabel("Exit Cook Mode")
             .accessibilityIdentifier("exitCook")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(recipe.title).font(.headline).lineLimit(1)
+                SectionLabel(text: "Cook Mode", font: .caption.weight(.heavy))
+                Text(recipe.title)
+                    .font(Theme.title(20))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
                 Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
                     .font(.subheadline.bold())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .accessibilityIdentifier("stepProgressLabel")
             }
             Spacer(minLength: 4)
@@ -209,14 +221,14 @@ struct CookModeView: View {
             Button {
                 servings = max(1, servings - 1)
             } label: {
-                Image(systemName: "minus").frame(width: 32, height: 36)
+                Image(systemName: "minus").font(.headline).frame(width: 40, height: 40)
             }
             .accessibilityLabel("Fewer servings")
             .accessibilityIdentifier("servingsMinus")
 
             VStack(spacing: 0) {
-                Text("\(servings)").font(.title3.bold()).monospacedDigit()
-                Text("servings").font(.caption2).foregroundStyle(.secondary)
+                Text("\(servings)").font(.title3.bold()).monospacedDigit().foregroundStyle(Theme.ink)
+                Text("servings").font(.caption2).foregroundStyle(Theme.muted)
             }
             .frame(minWidth: 48)
             .accessibilityElement(children: .combine)
@@ -225,18 +237,19 @@ struct CookModeView: View {
             Button {
                 servings = min(99, servings + 1)
             } label: {
-                Image(systemName: "plus").frame(width: 32, height: 36)
+                Image(systemName: "plus").font(.headline).frame(width: 40, height: 40)
             }
             .accessibilityLabel("More servings")
             .accessibilityIdentifier("servingsPlus")
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(SoftButtonStyle(circle: true))
     }
 
     private var ingredientChecklist: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)")
                 .font(.headline)
+                .foregroundStyle(Theme.ink)
                 .padding(.top, 8)
             ForEach(Array(recipe.sortedIngredients.enumerated()), id: \.element.id) { index, item in
                 let done = checked.contains(item.persistentModelID)
@@ -246,12 +259,12 @@ struct CookModeView: View {
                     HStack(spacing: 12) {
                         Image(systemName: done ? "checkmark.circle.fill" : "circle")
                             .font(.title2)
-                            .foregroundStyle(done ? Color.green : Color.secondary)
+                            .foregroundStyle(done ? Theme.accent : Theme.muted)
                             .accessibilityHidden(true)
                         Text(ingredientLine(item, servingsFrom: recipe.servings, to: servings))
                             .font(.title3)
                             .strikethrough(done)
-                            .foregroundStyle(done ? Color.secondary : Color.primary)
+                            .foregroundStyle(done ? Theme.muted : Theme.ink)
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
@@ -274,7 +287,7 @@ struct CookModeView: View {
                 Label("Back", systemImage: "chevron.left")
                     .frame(maxWidth: .infinity, minHeight: height)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(SoftButtonStyle())
             .disabled(stepIndex == 0)
             .accessibilityIdentifier("backStep")
 
@@ -285,8 +298,7 @@ struct CookModeView: View {
                     Label("Finish", systemImage: "checkmark")
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
                 .accessibilityIdentifier("finishCooking")
             } else {
                 Button {
@@ -296,8 +308,7 @@ struct CookModeView: View {
                         .labelStyle(TrailingIconLabelStyle())
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
                 .accessibilityIdentifier("nextStep")
             }
         }
@@ -306,9 +317,10 @@ struct CookModeView: View {
 
     private var finishedOverlay: some View {
         VStack(spacing: 16) {
-            Image(systemName: "party.popper.fill").font(.system(size: 56)).foregroundStyle(.orange)
+            Image(systemName: "party.popper.fill").font(.system(size: 56)).foregroundStyle(Theme.accent)
             Text("Enjoy your \(recipe.title)!")
-                .font(.title.bold())
+                .font(Theme.title(28))
+                .foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("finishedMessage")
             Button {
@@ -316,27 +328,25 @@ struct CookModeView: View {
             } label: {
                 Text("Done").font(.title2.bold()).frame(maxWidth: 240, minHeight: 60)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
             .accessibilityIdentifier("doneCooking")
             Button("Back to steps") {
                 withAnimation { finished = false }
             }
+            .font(.headline)
+            .tint(Theme.label)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 }
 
-/// The non-interactive strip between the panes. Purely decorative; nothing tappable lives here.
+/// The strip between the cards (where a hinge would be): empty cream, nothing drawn and
+/// nothing tappable.
 private struct HingeGap: View {
-    let vertical: Bool
-
     var body: some View {
-        Capsule()
-            .fill(Color.secondary.opacity(0.25))
-            .frame(width: vertical ? 4 : 44, height: vertical ? 44 : 4)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Color.clear
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

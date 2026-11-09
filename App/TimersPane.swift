@@ -15,12 +15,12 @@ struct TimersPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: dense ? 6 : (compact ? 8 : 12)) {
             HStack {
-                Label("Timers", systemImage: "timer")
-                    .font(.title2.bold())
+                SectionLabel(text: "Timers", systemImage: "timer", font: .title3.weight(.heavy))
+                    .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("timersHeader")
                 Spacer()
                 if !store.timers.isEmpty {
-                    Text("\(store.timers.count) active").foregroundStyle(.secondary)
+                    Text("\(store.timers.count) active").foregroundStyle(Theme.muted)
                 }
             }
 
@@ -30,7 +30,7 @@ struct TimersPane: View {
                 VStack(spacing: dense ? 6 : 10) {
                     if store.timers.isEmpty {
                         Text("No timers yet. Tap a preset, or start one from a step.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.ink)
                             .frame(maxWidth: .infinity, minHeight: 56)
                     }
                     ForEach(store.timers) { timer in
@@ -43,7 +43,9 @@ struct TimersPane: View {
             }
         }
         .padding(compact ? 12 : 20)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("timersCard")
     }
 
     /// Name + minutes + Start, and one-tap presets that start right away (using the name, if typed).
@@ -56,15 +58,18 @@ struct TimersPane: View {
                     .focused($nameFocused)
                     .accessibilityIdentifier("timerName")
                 HStack(spacing: 2) {
-                    Text("\(minutes)m").font(.headline).monospacedDigit().frame(minWidth: 36)
+                    Text("\(minutes)m").font(.headline).monospacedDigit().foregroundStyle(Theme.ink).frame(minWidth: 36)
                     Stepper("Minutes", value: $minutes, in: 1...600)
                         .labelsHidden()
                         .accessibilityIdentifier("timerMinutes")
                 }
-                Button("Start") { start(minutes) }
-                    .buttonStyle(.borderedProminent)
-                    .font(.headline)
-                    .accessibilityIdentifier("startCustomTimer")
+                Button {
+                    start(minutes)
+                } label: {
+                    Text("Start").font(.headline).padding(.horizontal, 16).frame(minHeight: 36)
+                }
+                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
+                .accessibilityIdentifier("startCustomTimer")
             }
             HStack(spacing: 6) {
                 ForEach(Self.presets, id: \.self) { preset in
@@ -73,7 +78,7 @@ struct TimersPane: View {
                     } label: {
                         Text("\(preset)m").font(.headline).frame(maxWidth: .infinity, minHeight: dense ? 26 : 36)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
                     .accessibilityLabel("Start \(preset) minute timer")
                     .accessibilityIdentifier("preset_\(preset)")
                 }
@@ -103,7 +108,7 @@ struct TimerCard: View {
                 HStack(spacing: 8) {
                     countdown(done: done, size: 30)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(timer.name).font(.subheadline.bold()).lineLimit(1)
+                        Text(timer.name).font(.subheadline.bold()).foregroundStyle(Theme.ink).lineLimit(1)
                         status(done: done).font(.caption.bold())
                     }
                     Spacer(minLength: 4)
@@ -114,7 +119,7 @@ struct TimerCard: View {
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(timer.name).font(.headline).lineLimit(1)
+                        Text(timer.name).font(.headline).foregroundStyle(Theme.ink).lineLimit(1)
                         Spacer()
                         status(done: done).font(.headline)
                     }
@@ -127,18 +132,17 @@ struct TimerCard: View {
                 .padding(12)
             }
         }
-        .background(done ? Color.red.opacity(0.18) : Color(.tertiarySystemGroupedBackground),
+        .background(done ? Color.red.opacity(0.18) : Theme.beige,
                     in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
     }
 
     private func countdown(done: Bool, size: CGFloat) -> some View {
         Text(TimeFormat.countdown(timer.remaining(at: now)))
-            .font(.system(size: size, weight: .bold, design: .rounded))
-            .monospacedDigit()
+            .font(Theme.timer(size))
             .lineLimit(1)
             .minimumScaleFactor(0.5)
-            .foregroundStyle(done ? Color.red : (timer.isPaused ? Color.secondary : Color.primary))
+            .foregroundStyle(done ? Color.red : (timer.isPaused ? Theme.muted : Theme.ink))
             .accessibilityIdentifier("timerCountdown_\(timer.name)")
     }
 
@@ -147,7 +151,7 @@ struct TimerCard: View {
         if done {
             Text("Done!").foregroundStyle(.red)
         } else if timer.isPaused {
-            Text("Paused").foregroundStyle(.secondary)
+            Text("Paused").foregroundStyle(Theme.muted)
         }
     }
 
@@ -171,9 +175,9 @@ struct TimerCard: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.title3.bold())
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.ink)
                 .frame(width: size, height: size)
-                .background(Color(.systemFill), in: Circle())
+                .background(Theme.card, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -223,14 +227,16 @@ struct ConverterView: View {
                 Text(result)
                     .font(.title2.bold())
                     .monospacedDigit()
+                    .foregroundStyle(Theme.ink)
                     .accessibilityIdentifier("converterResult")
             }
             .padding(.top, 8)
         } label: {
-            Label("Converter", systemImage: "scalemass").font(.headline)
+            Label("Converter", systemImage: "scalemass").font(.headline).foregroundStyle(Theme.ink)
         }
+        .tint(Theme.ink)
         .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background(Theme.beige, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var result: String {

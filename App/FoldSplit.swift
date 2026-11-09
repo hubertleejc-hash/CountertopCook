@@ -115,13 +115,16 @@ final class FoldSplitController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // One cream page under both panes and the hinge: no pane colours, no divider.
+        overrideUserInterfaceStyle = .light
+        view.backgroundColor = Theme.backgroundUI
         for host in [primaryHost, secondaryHost] {
-            host.view.backgroundColor = .clear
+            host.view.backgroundColor = Theme.backgroundUI
         }
         addChild(arrangement)
         arrangement.view.frame = view.bounds
         arrangement.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        arrangement.view.backgroundColor = .clear
+        arrangement.view.backgroundColor = Theme.backgroundUI
         view.addSubview(arrangement.view)
         arrangement.didMove(toParent: self)
         arrangement.setViewController(primaryHost, for: .primary)
@@ -168,8 +171,27 @@ final class FoldSplitController: UIViewController {
             "splitAxis=\(secondaryState.map { $0.splitAxis == .vertical ? "vertical" : "horizontal" } ?? "none")",
         ].joined(separator: " ")
         view.bringSubviewToFront(hingeView)
-        for host in [primaryHost, secondaryHost] {
-            setInsets(insets(clearing: hinge, in: host), on: host)
+        let hosts = [primaryHost, secondaryHost]
+        var extra = hosts.map { insets(clearing: hinge, in: $0) }
+        // Same-size cards: a status bar or camera inset on one outer edge would leave that pane
+        // narrower, so the other pane gets the same amount on its own outer edge.
+        let room = zip(hosts, extra).map { host, added -> CGFloat in
+            let free = host.view.bounds.inset(by: systemInsets(of: host)).inset(by: added)
+            return vertical ? free.width : free.height
+        }
+        if let target = room.min() {
+            for i in hosts.indices where room[i] > target + 0.5 {
+                let pane = hosts[i].view.convert(hosts[i].view.bounds, to: view)
+                let difference = room[i] - target
+                if vertical {
+                    if pane.midX < hinge.midX { extra[i].left += difference } else { extra[i].right += difference }
+                } else {
+                    if pane.midY < hinge.midY { extra[i].top += difference } else { extra[i].bottom += difference }
+                }
+            }
+        }
+        for (host, insets) in zip(hosts, extra) {
+            setInsets(insets, on: host)
         }
     }
 
@@ -180,12 +202,7 @@ final class FoldSplitController: UIViewController {
         let bounds = pane.bounds
         let overlap = pane.convert(hinge, from: view).intersection(bounds)
         guard !overlap.isNull, !overlap.isEmpty else { return .zero }
-        // The system's own inset on each edge, without the extra one set here earlier.
-        let extra = host.additionalSafeAreaInsets
-        let system = UIEdgeInsets(top: pane.safeAreaInsets.top - extra.top,
-                                  left: pane.safeAreaInsets.left - extra.left,
-                                  bottom: pane.safeAreaInsets.bottom - extra.bottom,
-                                  right: pane.safeAreaInsets.right - extra.right)
+        let system = systemInsets(of: host)
         var result = UIEdgeInsets.zero
         if overlap.height >= overlap.width {
             if overlap.midX >= bounds.midX {
@@ -199,6 +216,13 @@ final class FoldSplitController: UIViewController {
             result.top = max(0, overlap.maxY - bounds.minY - system.top)
         }
         return result
+    }
+
+    /// The system's own safe-area inset on each edge, without the extra one set here.
+    private func systemInsets(of host: UIViewController) -> UIEdgeInsets {
+        let safe = host.view.safeAreaInsets, extra = host.additionalSafeAreaInsets
+        return UIEdgeInsets(top: max(0, safe.top - extra.top), left: max(0, safe.left - extra.left),
+                            bottom: max(0, safe.bottom - extra.bottom), right: max(0, safe.right - extra.right))
     }
 
     private func setInsets(_ insets: UIEdgeInsets, on host: UIViewController) {
@@ -222,32 +246,22 @@ private final class RegionTrackingView: UIView {
     }
 }
 
-/// The empty strip over the hinge. Decorative and not interactive: nothing tappable sits here.
-/// UI tests find it as "hingeGap" and read the region details from its value.
+/// The strip over the hinge: invisible (the cream page shows through) and not interactive, so
+/// nothing tappable sits here. UI tests find it as "hingeGap" and read the region from its value.
 @available(iOS 27.1, *)
 private final class HingeGapView: UIView {
-    var vertical = true { didSet { setNeedsLayout() } }
-    private let mark = CALayer()
+    var vertical = true
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        backgroundColor = .clear
         isUserInteractionEnabled = false
         isAccessibilityElement = true
         accessibilityIdentifier = "hingeGap"
         accessibilityLabel = "Hinge"
-        mark.backgroundColor = UIColor.secondaryLabel.withAlphaComponent(0.25).cgColor
-        layer.addSublayer(mark)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let size = vertical ? CGSize(width: 4, height: 44) : CGSize(width: 44, height: 4)
-        mark.frame = CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
-                            width: size.width, height: size.height)
-        mark.cornerRadius = 2
-    }
 }
 
 #endif
