@@ -108,6 +108,8 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(element("ingredient_1").label.contains("1 1/2 cup grated parmesan"), element("ingredient_1").label)
 
         element("servingsPlus").tap()
+        let three = expectation(for: NSPredicate(format: "label BEGINSWITH '3'"), evaluatedWith: element("servingsLabel"))
+        wait(for: [three], timeout: 5)
         XCTAssertTrue(element("servingsLabel").label.hasPrefix("3"), element("servingsLabel").label)
         XCTAssertTrue(element("ingredient_0").label.contains("300 g spaghetti"), element("ingredient_0").label)
         XCTAssertTrue(element("ingredient_1").label.contains("2 1/4 cup grated parmesan"), element("ingredient_1").label)
@@ -255,6 +257,21 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         start.tap()
         XCTAssertTrue(element("stepText").waitForExistence(timeout: 5))
+        waitForCookModeToSettle()
+    }
+
+    /// Cook Mode slides up as a full-screen cover. A tap sent while it is still moving can land
+    /// beside the control (seen on iPad), so wait until the header stops moving.
+    private func waitForCookModeToSettle() {
+        let exit = element("exitCook")
+        var last = CGRect.null
+        for _ in 0..<20 {
+            let frame = exit.frame
+            if frame == last && exit.isHittable { break }
+            last = frame
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        Thread.sleep(forTimeInterval: 0.5)
     }
 
     private func seconds(_ countdown: String) -> Int {

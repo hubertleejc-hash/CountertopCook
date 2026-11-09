@@ -53,6 +53,16 @@ run_tests() {
     "$@" \
     > "$OUT/test-$label.log" 2>&1
   local result=$?
+  # The preview runner's test process sometimes crashes before any test starts. Test retries
+  # don't cover that, so run the whole set once more (only when no test ran at all).
+  if [ $result -ne 0 ] && [ "${RUNNER_RETRY:-0}" = 0 ] && grep -q "never finished bootstrapping" "$OUT/test-$label.log" \
+     && ! grep -q "Test Case .* started" "$OUT/test-$label.log"; then
+    echo "::warning::[$label] Test runner crashed before starting; running the tests again"
+    mv "$OUT/test-$label.log" "$OUT/test-$label-crashed.log"
+    rm -rf "$OUT/$label.xcresult"
+    RUNNER_RETRY=1 run_tests "$label" "$name" "$destination" "$pose" "$@"
+    return
+  fi
   grep -E "Test Case .* (passed|failed)|error:|XCTAssert|NOTE:|FOLD:|CARDS:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
   # Surface each failure as an annotation so it shows on the run page.
   grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \
