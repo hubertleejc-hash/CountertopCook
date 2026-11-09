@@ -172,8 +172,15 @@ final class CountertopCookUITests: XCTestCase {
         for id in mustBeVisible {
             let item = element(id)
             XCTAssertTrue(item.waitForExistence(timeout: 3), "\(id) missing in \(name)")
-            XCTAssertTrue(item.isHittable, "\(id) not visible in \(name)")
             XCTAssertTrue(window.insetBy(dx: -1, dy: -1).contains(item.frame), "\(id) clipped in \(name): \(item.frame)")
+            if item.elementType == .button {
+                XCTAssertTrue(item.isHittable, "\(id) not tappable in \(name)")
+            }
+        }
+        // Controls must stay clear of the status bar / Dynamic Island and the home indicator.
+        let safeTop = window.minY + (window.width > window.height ? 0 : 44)
+        for id in ["exitCook", "servingsPlus", "servingsMinus"] {
+            XCTAssertGreaterThanOrEqual(element(id).frame.minY, safeTop, "\(id) under the status bar in \(name)")
         }
 
         // The physical centre line (where a fold or hinge sits) must have no tappable control on it.

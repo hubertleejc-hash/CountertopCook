@@ -31,9 +31,12 @@ struct CookModeView: View {
     var body: some View {
         // Measure the whole screen (not just the safe area) so the gap sits on the physical
         // centre line, which is where a fold is. Safe-area insets are added back per pane.
+        // The outer reader respects the safe area, so it reports the real insets; the inner one
+        // ignores it, so its size is the full screen.
+        GeometryReader { outer in
+        let insets = outer.safeAreaInsets
         GeometryReader { geo in
             let size = geo.size
-            let insets = geo.safeAreaInsets
             let margin: CGFloat = 8
             let half = Self.hingeGap / 2
             let wide = size.width > size.height && size.width >= 560
@@ -65,6 +68,7 @@ struct CookModeView: View {
             }
         }
         .ignoresSafeArea(.container)
+        }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
