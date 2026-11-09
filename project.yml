@@ -32,6 +32,10 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
+        # The iPhone Duo fold APIs (UIArrangementViewController, UIHingeInteraction,
+        # reserved regions) exist only in the iOS 27 SDK. Older SDKs build without them.
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator27*]": "$(inherited) FOLD_APIS"
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos27*]": "$(inherited) FOLD_APIS"
   CountertopCookUITests:
     type: bundle.ui-testing
     platform: iOS

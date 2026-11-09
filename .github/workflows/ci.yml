@@ -47,11 +47,14 @@ jobs:
       - name: Create iPhone Duo simulator (iOS 27.1)
         run: ci/create-duo.sh
 
-      - name: Build app and run UI tests on iPhone Duo
+      - name: Build app and run UI tests on iPhone Duo (closed, then unfolded)
         env:
           SIMULATOR_LIST_CMD: ci/create-duo.sh
           # The preview xcode-27 runner sometimes times out XCUITest UI queries.
           UI_TEST_RETRIES: 2
+          # After the closed run, open the hinge (ci/duo-hinge.sh) and rerun the layout test:
+          # fully open (180 degrees), then partially open (120 degrees).
+          FOLD_POSES: "open:180 partial:120"
         run: ci/run-ui-tests.sh
 
       # Screenshots and summaries go to a branch so they can be viewed without signing in.

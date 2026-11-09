@@ -1,0 +1,253 @@
+import SwiftUI
+import UIKit
+
+/// The hinge state Cook Mode lays itself out for, read from `UIHingeInteraction`.
+/// `.none` means no hinge: a normal iPhone or iPad, or an SDK without the fold APIs.
+enum FoldPosture: String {
+    case none, closed, partiallyOpen, fullyOpen, unknown
+
+    var isUnfolded: Bool { self == .partiallyOpen || self == .fullyOpen }
+}
+
+/// Reports the hinge posture of the screen Cook Mode is on. On SDKs without the fold APIs it
+/// does nothing, so the posture stays `.none` and Cook Mode keeps its stacked layout.
+struct HingeProbe: View {
+    @Binding var posture: FoldPosture
+
+    var body: some View {
+        #if FOLD_APIS
+        if #available(iOS 27.1, *) {
+            HingeProbeView(posture: $posture).frame(width: 1, height: 1)
+        }
+        #endif
+    }
+}
+
+#if FOLD_APIS
+
+/// A 1-pt view carrying a `UIHingeInteraction`. Its accessibility label ("foldState") is the
+/// posture, so UI tests can confirm which state the app detected.
+@available(iOS 27.1, *)
+private struct HingeProbeView: UIViewRepresentable {
+    @Binding var posture: FoldPosture
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = true
+        view.accessibilityIdentifier = "foldState"
+        view.accessibilityLabel = FoldPosture.none.rawValue
+        let coordinator = context.coordinator
+        let interaction = UIHingeInteraction { [weak view] _, update in
+            let posture = Self.posture(update.hinge)
+            view?.accessibilityLabel = posture.rawValue
+            // Not during a SwiftUI update: hand the change over on the next main-queue turn.
+            DispatchQueue.main.async { coordinator.report?(posture) }
+        }
+        view.addInteraction(interaction)
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        let binding = $posture
+        context.coordinator.report = { if binding.wrappedValue != $0 { binding.wrappedValue = $0 } }
+    }
+
+    private static func posture(_ hinge: UIHinge?) -> FoldPosture {
+        guard let hinge else { return .none }
+        switch hinge.status {
+        case .closed: return .closed
+        case .partiallyOpen: return .partiallyOpen
+        case .fullyOpen: return .fullyOpen
+        default: return .unknown
+        }
+    }
+
+    final class Coordinator {
+        var report: ((FoldPosture) -> Void)?
+    }
+}
+
+/// Recipe and timers in a `UIArrangementViewController` split arrangement, for an unfolded
+/// iPhone Duo. The arrangement puts the primary view leading (or on top) and the secondary
+/// trailing (or below). The gap between them comes from the hinge's reserved region.
+@available(iOS 27.1, *)
+struct FoldSplitView<Primary: View, Secondary: View>: UIViewControllerRepresentable {
+    let primary: Primary
+    let secondary: Secondary
+
+    func makeUIViewController(context: Context) -> FoldSplitController {
+        FoldSplitController(primary: AnyView(primary), secondary: AnyView(secondary))
+    }
+
+    func updateUIViewController(_ controller: FoldSplitController, context: Context) {
+        controller.update(primary: AnyView(primary), secondary: AnyView(secondary))
+    }
+}
+
+@available(iOS 27.1, *)
+final class FoldSplitController: UIViewController {
+    private let arrangement = UIArrangementViewController()
+    private let primaryHost: UIHostingController<AnyView>
+    private let secondaryHost: UIHostingController<AnyView>
+    private let hingeView = HingeGapView()
+
+    init(primary: AnyView, secondary: AnyView) {
+        primaryHost = UIHostingController(rootView: primary)
+        secondaryHost = UIHostingController(rootView: secondary)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func update(primary: AnyView, secondary: AnyView) {
+        primaryHost.rootView = primary
+        secondaryHost.rootView = secondary
+    }
+
+    override func loadView() {
+        let root = RegionTrackingView()
+        root.onRegionsChanged = { [weak self] in self?.view.setNeedsLayout() }
+        view = root
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        for host in [primaryHost, secondaryHost] {
+            host.view.backgroundColor = .clear
+        }
+        addChild(arrangement)
+        arrangement.view.frame = view.bounds
+        arrangement.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        arrangement.view.backgroundColor = .clear
+        view.addSubview(arrangement.view)
+        arrangement.didMove(toParent: self)
+        arrangement.setViewController(primaryHost, for: .primary)
+        arrangement.setViewController(secondaryHost, for: .secondary)
+        arrangement.updateArrangement(.split)
+        view.addSubview(hingeView)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        layoutHinge()
+    }
+
+    /// Places the gap on the hinge's division region and keeps each pane's content off it.
+    private func layoutHinge() {
+        // Fully open, the fold is an inactive region, still with a frame. Partially open, it is
+        // active. Prefer an active one.
+        let regions = view.reservedRegions(kind: .division, options: .includeInactive)
+        let region = regions.first(where: \.isActive) ?? regions.first
+        guard let region, !region.frame.isNull, region.frame.width > 0 || region.frame.height > 0 else {
+            hingeView.isHidden = true
+            setInsets(.zero, on: primaryHost)
+            setInsets(.zero, on: secondaryHost)
+            return
+        }
+        // The region's frame already includes the system's margins. Keep at least Cook Mode's
+        // usual gap, centred on the real hinge, so the two panes are clearly apart.
+        let vertical = region.frame.height >= region.frame.width
+        let minimum = CookModeView.hingeGap
+        let hinge = vertical
+            ? region.frame.insetBy(dx: min(0, (region.frame.width - minimum) / 2), dy: 0)
+            : region.frame.insetBy(dx: 0, dy: min(0, (region.frame.height - minimum) / 2))
+        hingeView.isHidden = false
+        hingeView.frame = hinge
+        hingeView.vertical = vertical
+        let primaryState = arrangement.state(for: .primary)
+        let secondaryState = arrangement.state(for: .secondary)
+        hingeView.accessibilityValue = [
+            "active=\(region.isActive)",
+            "axis=\(vertical ? "vertical" : "horizontal")",
+            "region=\(Int(region.frame.minX)),\(Int(region.frame.minY)),\(Int(region.frame.width)),\(Int(region.frame.height))",
+            "primaryHidden=\(primaryState?.isHidden ?? true)",
+            "secondaryHidden=\(secondaryState?.isHidden ?? true)",
+            "splitAxis=\(secondaryState.map { $0.splitAxis == .vertical ? "vertical" : "horizontal" } ?? "none")",
+        ].joined(separator: " ")
+        view.bringSubviewToFront(hingeView)
+        for host in [primaryHost, secondaryHost] {
+            setInsets(insets(clearing: hinge, in: host), on: host)
+        }
+    }
+
+    /// Extra safe-area insets that keep a pane's content off the part of `hinge` it overlaps.
+    /// Zero when the arrangement has already placed the pane clear of the hinge.
+    private func insets(clearing hinge: CGRect, in host: UIViewController) -> UIEdgeInsets {
+        let pane = host.view!
+        let bounds = pane.bounds
+        let overlap = pane.convert(hinge, from: view).intersection(bounds)
+        guard !overlap.isNull, !overlap.isEmpty else { return .zero }
+        // The system's own inset on each edge, without the extra one set here earlier.
+        let extra = host.additionalSafeAreaInsets
+        let system = UIEdgeInsets(top: pane.safeAreaInsets.top - extra.top,
+                                  left: pane.safeAreaInsets.left - extra.left,
+                                  bottom: pane.safeAreaInsets.bottom - extra.bottom,
+                                  right: pane.safeAreaInsets.right - extra.right)
+        var result = UIEdgeInsets.zero
+        if overlap.height >= overlap.width {
+            if overlap.midX >= bounds.midX {
+                result.right = max(0, bounds.maxX - overlap.minX - system.right)
+            } else {
+                result.left = max(0, overlap.maxX - bounds.minX - system.left)
+            }
+        } else if overlap.midY >= bounds.midY {
+            result.bottom = max(0, bounds.maxY - overlap.minY - system.bottom)
+        } else {
+            result.top = max(0, overlap.maxY - bounds.minY - system.top)
+        }
+        return result
+    }
+
+    private func setInsets(_ insets: UIEdgeInsets, on host: UIViewController) {
+        if host.additionalSafeAreaInsets != insets { host.additionalSafeAreaInsets = insets }
+    }
+}
+
+/// Root view of the split. UIKit reruns `updateConstraints` when the reserved regions read
+/// there change (fold opened or closed), which triggers a fresh hinge layout.
+@available(iOS 27.1, *)
+private final class RegionTrackingView: UIView {
+    var onRegionsChanged: (() -> Void)?
+
+    // Without this UIKit may never call updateConstraints on a view with no constraints.
+    override class var requiresConstraintBasedLayout: Bool { true }
+
+    override func updateConstraints() {
+        _ = reservedRegions(kind: .division, options: .includeInactive)
+        onRegionsChanged?()
+        super.updateConstraints()
+    }
+}
+
+/// The empty strip over the hinge. Decorative and not interactive: nothing tappable sits here.
+/// UI tests find it as "hingeGap" and read the region details from its value.
+@available(iOS 27.1, *)
+private final class HingeGapView: UIView {
+    var vertical = true { didSet { setNeedsLayout() } }
+    private let mark = CALayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        isAccessibilityElement = true
+        accessibilityIdentifier = "hingeGap"
+        accessibilityLabel = "Hinge"
+        mark.backgroundColor = UIColor.secondaryLabel.withAlphaComponent(0.25).cgColor
+        layer.addSublayer(mark)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let size = vertical ? CGSize(width: 4, height: 44) : CGSize(width: 44, height: 4)
+        mark.frame = CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
+                            width: size.width, height: size.height)
+        mark.cornerRadius = 2
+    }
+}
+
+#endif

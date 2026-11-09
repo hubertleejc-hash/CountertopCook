@@ -117,38 +117,117 @@ final class CountertopCookUITests: XCTestCase {
         snapshot("servings")
     }
 
-    // MARK: Acceptance test 6: nothing clipped, centre line clear, timers always visible
+    // MARK: Acceptance test 6: nothing clipped, nothing on the hinge, timers always visible
 
+    /// On iPhone Duo, CI runs this test once per hinge pose and says which in FOLD_POSE:
+    /// "closed" (outer display), then "open" and "partial" after moving the hinge with
+    /// ci/duo-hinge.sh. Elsewhere FOLD_POSE is empty and the device is rotated instead.
     func testLayoutKeepsTimersVisibleAndCentreLineClear() {
         openCookMode("Pan-Seared Steak")
         // Long timers on purpose: a timer finishing mid-test shows the "Timer done" alert,
         // which covers every button and makes the visibility checks fail.
         element("preset_5").tap()
         element("preset_10").tap()
-        checkLayout("portrait-step1")
-        element("nextStep").tap()
-        checkLayout("portrait-step2")
 
-        XCUIDevice.shared.orientation = .landscapeLeft
-        let window = app.windows.firstMatch
-        let rotated = NSPredicate { _, _ in window.frame.width > window.frame.height }
-        let didRotate = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: rotated, object: nil)], timeout: 10)
-        guard didRotate == .completed else {
-            // iPhone Duo (closed) stays in portrait; landscape checks don't apply on this device.
-            let note = "NOTE: device did not rotate to landscape; landscape layout checks skipped"
-            print(note)
-            let attachment = XCTAttachment(string: note)
-            attachment.lifetime = .keepAlways
-            add(attachment)
-            return
+        switch foldPose {
+        case "open", "partial":
+            checkUnfolded(foldPose!)
+        case "closed":
+            requireFoldState(["closed", "none"])
+            checkLayout("closed-step1")
+            element("nextStep").tap()
+            checkLayout("closed-step2")
+            print("FOLD: closed Duo checked in portrait; unfolded layout is checked in the open and partial runs")
+        default:
+            checkLayout("portrait-step1")
+            element("nextStep").tap()
+            checkLayout("portrait-step2")
+
+            XCUIDevice.shared.orientation = .landscapeLeft
+            let window = app.windows.firstMatch
+            let rotated = NSPredicate { _, _ in window.frame.width > window.frame.height }
+            let didRotate = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: rotated, object: nil)], timeout: 10)
+            XCTAssertEqual(didRotate, .completed, "Device did not rotate to landscape: \(window.frame)")
+            sleep(1)
+            checkLayout("landscape-step2")
+            element("nextStep").tap()
+            checkLayout("landscape-step3")
         }
+    }
+
+    /// Unfolded iPhone Duo: the app must report the hinge as open, and the split must sit on
+    /// either side of the hinge's reserved region, the recipe leading and the timers trailing.
+    private func checkUnfolded(_ pose: String) {
+        requireFoldState([pose == "open" ? "fullyOpen" : "partiallyOpen"])
+        let hinge = element("hingeGap")
+        XCTAssertTrue(hinge.waitForExistence(timeout: 5),
+                      "No hinge gap in the \(pose) pose: the app found no division reserved region")
         sleep(1)
-        checkLayout("landscape-step2")
+        let window = app.windows.firstMatch.frame
+        print("FOLD: pose=\(pose) foldState=\(element("foldState").label) window=\(window) hinge=\(hinge.frame) region=\(hinge.value ?? "")")
+        let vertical = hinge.frame.height >= hinge.frame.width
+        if pose == "open" {
+            XCTAssertTrue(vertical, "Fully open, the hinge should run top to bottom for a left/right split: \(hinge.frame) in \(window)")
+        }
+        checkFoldLayout("unfolded-\(pose)-step1", hinge: hinge.frame)
         element("nextStep").tap()
-        checkLayout("landscape-step3")
+        checkFoldLayout("unfolded-\(pose)-step2", hinge: hinge.frame)
+    }
+
+    private func checkFoldLayout(_ name: String, hinge: CGRect) {
+        checkVisible(name)
+        let window = app.windows.firstMatch.frame
+        let vertical = hinge.height >= hinge.width
+        let next = element("nextStep").exists ? "nextStep" : "finishCooking"
+        let recipeIDs = ["exitCook", "stepProgressLabel", "stepText", "servingsPlus", "backStep", next]
+        let timerIDs = ["timersHeader", "preset_5", "timerCountdown_5 min", "timerCountdown_10 min"]
+        // Recipe on the leading (or top) side of the hinge, timers on the other side.
+        for id in recipeIDs {
+            let frame = element(id).frame
+            if vertical {
+                XCTAssertLessThanOrEqual(frame.maxX, hinge.minX + 1, "\(id) is not left of the hinge in \(name): \(frame) vs \(hinge)")
+            } else {
+                XCTAssertLessThanOrEqual(frame.maxY, hinge.minY + 1, "\(id) is not above the hinge in \(name): \(frame) vs \(hinge)")
+            }
+        }
+        for id in timerIDs {
+            let frame = element(id).frame
+            if vertical {
+                XCTAssertGreaterThanOrEqual(frame.minX, hinge.maxX - 1, "\(id) is not right of the hinge in \(name): \(frame) vs \(hinge)")
+            } else {
+                XCTAssertGreaterThanOrEqual(frame.minY, hinge.maxY - 1, "\(id) is not below the hinge in \(name): \(frame) vs \(hinge)")
+            }
+        }
+        // Two halves of about the same size.
+        let first = vertical ? hinge.minX - window.minX : hinge.minY - window.minY
+        let second = vertical ? window.maxX - hinge.maxX : window.maxY - hinge.maxY
+        XCTAssertEqual(first, second, accuracy: (vertical ? window.width : window.height) * 0.1,
+                       "The split around the hinge is not 50/50 in \(name): \(hinge) in \(window)")
+        // Nothing tappable on the hinge.
+        for button in app.buttons.allElementsBoundByIndex where button.exists && button.isHittable {
+            XCTAssertFalse(button.frame.intersects(hinge),
+                           "Button '\(button.label)' sits on the hinge in \(name): \(button.frame) vs \(hinge)")
+        }
+    }
+
+    /// Waits for Cook Mode's hinge probe (UIHingeInteraction) to report one of `expected`, and
+    /// fails clearly if it doesn't. Closed, the API may report the hinge closed or no hinge.
+    private func requireFoldState(_ expected: Set<String>) {
+        let state = element("foldState")
+        XCTAssertTrue(state.waitForExistence(timeout: 5),
+                      "Cook Mode has no foldState probe: the app was not built with the iOS 27.1 fold APIs")
+        let reached = NSPredicate { _, _ in expected.contains(state.label) }
+        let result = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: reached, object: nil)], timeout: 20)
+        print("FOLD: expected \(expected.sorted().joined(separator: " or ")), app reports \(state.label)")
+        XCTAssertEqual(result, .completed, "Hinge state \(expected.sorted().joined(separator: " or ")) not reached: the app reports '\(state.label)'")
     }
 
     // MARK: Helpers
+
+    private var foldPose: String? {
+        let pose = ProcessInfo.processInfo.environment["FOLD_POSE"] ?? ""
+        return pose.isEmpty ? nil : pose
+    }
 
     private func element(_ id: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
@@ -181,6 +260,22 @@ final class CountertopCookUITests: XCTestCase {
     }
 
     private func checkLayout(_ name: String) {
+        checkVisible(name)
+        let window = app.windows.firstMatch.frame
+        // The physical centre line (where a fold or hinge sits) must have no tappable control on it.
+        let wide = window.width > window.height && window.width >= 560
+        let centreLine = wide
+            ? CGRect(x: window.midX - 10, y: window.minY, width: 20, height: window.height)
+            : CGRect(x: window.minX, y: window.midY - 10, width: window.width, height: 20)
+        for button in app.buttons.allElementsBoundByIndex where button.exists && button.isHittable {
+            XCTAssertFalse(button.frame.intersects(centreLine),
+                           "Button '\(button.label)' sits on the centre line in \(name): \(button.frame)")
+        }
+    }
+
+    /// Takes a screenshot and checks every Cook Mode control and both timers are on screen,
+    /// unclipped, tappable, and clear of the status bar.
+    private func checkVisible(_ name: String) {
         snapshot(name)
         let window = app.windows.firstMatch.frame
         let next = element("nextStep").exists ? "nextStep" : "finishCooking"
@@ -211,16 +306,6 @@ final class CountertopCookUITests: XCTestCase {
             for id in headerIDs {
                 XCTAssertGreaterThanOrEqual(element(id).frame.minY, window.minY + 44, "\(id) under the status bar in \(name)")
             }
-        }
-
-        // The physical centre line (where a fold or hinge sits) must have no tappable control on it.
-        let wide = window.width > window.height && window.width >= 560
-        let centreLine = wide
-            ? CGRect(x: window.midX - 10, y: window.minY, width: 20, height: window.height)
-            : CGRect(x: window.minX, y: window.midY - 10, width: window.width, height: 20)
-        for button in app.buttons.allElementsBoundByIndex where button.exists && button.isHittable {
-            XCTAssertFalse(button.frame.intersects(centreLine),
-                           "Button '\(button.label)' sits on the centre line in \(name): \(button.frame)")
         }
     }
 

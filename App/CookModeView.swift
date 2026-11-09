@@ -8,9 +8,12 @@ func ingredientLine(_ item: Ingredient, servingsFrom base: Int, to servings: Int
 }
 
 /// Cook Mode: the recipe and the timers are always on screen together.
-/// - Wide (unfolded, landscape, iPad): recipe left, timers right, 50/50.
-/// - Tall (closed phone, portrait, tented): recipe step on top, timers below, 50/50.
-/// A clear gap runs down the middle of either split so no button ever sits on a fold.
+/// - Unfolded iPhone Duo (hinge partially or fully open): a `UIArrangementViewController` split,
+///   recipe leading or on top, timers trailing or below, with the gap on the hinge's reserved
+///   region (see FoldSplit.swift).
+/// - Otherwise, wide (landscape, iPad): recipe left, timers right, 50/50.
+/// - Otherwise, tall (closed Duo, portrait phone): recipe step on top, timers below, 50/50.
+/// Off the Duo split, a clear gap runs down the middle so no button sits on the centre line.
 struct CookModeView: View {
     let recipe: Recipe
     @Environment(TimerStore.self) private var timers
@@ -19,6 +22,7 @@ struct CookModeView: View {
     @State private var servings: Int
     @State private var checked: Set<PersistentIdentifier> = []
     @State private var finished = false
+    @State private var fold = FoldPosture.none
 
     /// Width of the empty strip kept between the two panes (where a hinge would be).
     static let hingeGap: CGFloat = 28
@@ -31,6 +35,54 @@ struct CookModeView: View {
     }
 
     var body: some View {
+        Group {
+            if let split = foldSplit {
+                split
+            } else {
+                stackedLayout
+            }
+        }
+        .background(alignment: .topLeading) { HingeProbe(posture: $fold) }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .alert("Timer done", isPresented: Binding(
+            get: { !timers.finishedNames.isEmpty },
+            set: { if !$0 { timers.dismissAlert() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("\(timers.finishedNames.first ?? "Your timer") is done.")
+        }
+    }
+
+    /// The arrangement-view split, only while an iPhone Duo's hinge is open.
+    private var foldSplit: AnyView? {
+        #if FOLD_APIS
+        if #available(iOS 27.1, *), fold.isUnfolded {
+            let margin: CGFloat = 8
+            return AnyView(
+                FoldSplitView(
+                    primary: GeometryReader { pane in
+                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320)
+                            .padding(margin)
+                    }
+                    .environment(timers),
+                    secondary: GeometryReader { pane in
+                        TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
+                                   dense: pane.size.height - 2 * margin < Self.densePaneHeight)
+                            .padding(margin)
+                    }
+                    .environment(timers)
+                )
+                .ignoresSafeArea(.container)
+            )
+        }
+        #endif
+        return nil
+    }
+
+    private var stackedLayout: some View {
         // Measure the whole screen (not just the safe area) so the gap sits on the physical
         // centre line, which is where a fold is. Safe-area insets are added back per pane.
         // The outer reader respects the safe area, so it reports the real insets; the inner one
@@ -72,17 +124,6 @@ struct CookModeView: View {
             }
         }
         .ignoresSafeArea(.container)
-        }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        .alert("Timer done", isPresented: Binding(
-            get: { !timers.finishedNames.isEmpty },
-            set: { if !$0 { timers.dismissAlert() } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("\(timers.finishedNames.first ?? "Your timer") is done.")
         }
     }
 

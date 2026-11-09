@@ -4,6 +4,8 @@
 # Simulators come from ci/pick_simulators.py, or from the command in $SIMULATOR_LIST_CMD
 # (for example ci/create-duo.sh). Each line is 'label|udid|name[|destination]'.
 # Screenshots land in ci-output/screenshots, result bundles in ci-output/*.xcresult.
+# Set FOLD_POSES (iPhone Duo only), for example "open:180 partial:120", to run the suite with
+# the hinge closed and then the layout test again with the hinge at each of those angles.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -36,6 +38,33 @@ if ! grep -q "TEST BUILD SUCCEEDED" "$OUT/build.log"; then
 fi
 
 status=0
+
+# run_tests <label> <name> <destination> <fold pose or ""> [xcodebuild args...]
+run_tests() {
+  local label=$1 name=$2 destination=$3 pose=$4
+  shift 4
+  TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" TEST_RUNNER_FOLD_POSE="$pose" xcodebuild test-without-building \
+    -project "$ROOT/CountertopCook.xcodeproj" \
+    -scheme CountertopCook \
+    -destination "$destination" \
+    -derivedDataPath "$DERIVED" \
+    -resultBundlePath "$OUT/$label.xcresult" \
+    ${UI_TEST_RETRIES:+-retry-tests-on-failure -test-iterations $((UI_TEST_RETRIES + 1))} \
+    "$@" \
+    > "$OUT/test-$label.log" 2>&1
+  local result=$?
+  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|NOTE:|FOLD:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
+  # Surface each failure as an annotation so it shows on the run page.
+  grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \
+    | while IFS= read -r line; do echo "::error::[$label] $line"; done
+  if [ $result -ne 0 ]; then
+    echo "::error::UI tests failed on $name${pose:+ (hinge $pose)}"
+    status=1
+  else
+    echo "UI tests passed on $name${pose:+ (hinge $pose)}"
+  fi
+}
+
 while IFS='|' read -r label udid name destination; do
   [ -z "$udid" ] && continue
   destination=${destination:-id=$udid}
@@ -48,26 +77,24 @@ while IFS='|' read -r label udid name destination; do
     && xcrun simctl launch "$udid" com.hubertlee.countertopcook -uitesting >/dev/null \
     && sleep 20 \
     && xcrun simctl terminate "$udid" com.hubertlee.countertopcook
-  TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" xcodebuild test-without-building \
-    -project "$ROOT/CountertopCook.xcodeproj" \
-    -scheme CountertopCook \
-    -destination "$destination" \
-    -derivedDataPath "$DERIVED" \
-    -resultBundlePath "$OUT/$label.xcresult" \
-    ${UI_TEST_RETRIES:+-retry-tests-on-failure -test-iterations $((UI_TEST_RETRIES + 1))} \
-    > "$OUT/test-$label.log" 2>&1
-  result=$?
-  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|NOTE:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
+  # A freshly booted iPhone Duo starts folded shut, on the outer display.
+  run_tests "$label" "$name" "$destination" "${FOLD_POSES:+closed}"
   echo "::endgroup::"
-  # Surface each failure as an annotation so it shows on the run page.
-  grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \
-    | while IFS= read -r line; do echo "::error::[$label] $line"; done
-  if [ $result -ne 0 ]; then
-    echo "::error::UI tests failed on $name"
-    status=1
-  else
-    echo "UI tests passed on $name"
-  fi
+
+  for entry in ${FOLD_POSES:-}; do
+    pose=${entry%%:*}
+    degrees=${entry#*:}
+    echo "::group::Layout test on $name with the hinge $pose ($degrees degrees)"
+    if ! "$ROOT/ci/duo-hinge.sh" "$udid" "$degrees"; then
+      echo "::error::Could not move the $name hinge to $degrees degrees ($pose); unfolded layout not tested."
+      status=1
+      echo "::endgroup::"
+      continue
+    fi
+    run_tests "$label-$pose" "$name" "$destination" "$pose" \
+      -only-testing:CountertopCookUITests/CountertopCookUITests/testLayoutKeepsTimersVisibleAndCentreLineClear
+    echo "::endgroup::"
+  done
   xcrun simctl shutdown "$udid" 2>/dev/null
 done < "$OUT/simulators.txt"
 
