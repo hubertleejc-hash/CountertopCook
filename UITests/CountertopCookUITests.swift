@@ -34,7 +34,10 @@ final class CountertopCookUITests: XCTestCase {
         element("addStep").tap()
         type("Eat while warm.", into: "stepText_2")
         hideKeyboard()
-        element("saveRecipe").tap()
+        snapshot("editor-before-save")
+        // iOS 27.1 on iPhone Duo can drop the toolbar item's identifier; fall back to its label.
+        let save = element("saveRecipe")
+        (save.waitForExistence(timeout: 3) ? save : app.buttons["Save"].firstMatch).tap()
 
         openCookMode("Test Toast")
         XCTAssertEqual(element("stepProgressLabel").label, "Step 1 of 3")
@@ -182,10 +185,20 @@ final class CountertopCookUITests: XCTestCase {
                 XCTAssertTrue(item.isHittable, "\(id) not tappable in \(name)")
             }
         }
-        // Controls must stay clear of the status bar / Dynamic Island and the home indicator.
-        let safeTop = window.minY + (window.width > window.height ? 0 : 44)
-        for id in ["exitCook", "servingsPlus", "servingsMinus"] {
-            XCTAssertGreaterThanOrEqual(element(id).frame.minY, safeTop, "\(id) under the status bar in \(name)")
+        // Controls must stay clear of the status bar. Use its real frame: on iPhone Duo it runs
+        // down the side instead of across the top.
+        let statusBar = XCUIApplication(bundleIdentifier: "com.apple.springboard").statusBars.firstMatch
+        let headerIDs = ["exitCook", "servingsPlus", "servingsMinus"]
+        if statusBar.exists, !statusBar.frame.isEmpty {
+            for id in headerIDs {
+                XCTAssertFalse(element(id).frame.intersects(statusBar.frame),
+                               "\(id) under the status bar in \(name): \(element(id).frame) vs \(statusBar.frame)")
+            }
+        } else if window.height > window.width * 1.5 {
+            // Tall phone in portrait with no status bar element exposed: assume it's across the top.
+            for id in headerIDs {
+                XCTAssertGreaterThanOrEqual(element(id).frame.minY, window.minY + 44, "\(id) under the status bar in \(name)")
+            }
         }
 
         // The physical centre line (where a fold or hinge sits) must have no tappable control on it.

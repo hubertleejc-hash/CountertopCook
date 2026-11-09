@@ -32,6 +32,7 @@ final class TimerStore {
         let timer = CookTimer(name: uniqueName(trimmed.isEmpty ? "\(minutes) min" : trimmed),
                               duration: TimeInterval(minutes * 60), start: Date())
         timers.append(timer)
+        now = Date()  // the clock is idle while there are no timers, so bring it up to date
         requestNotificationPermissionIfNeeded()
         scheduleNotification(for: timer)
     }
@@ -74,6 +75,8 @@ final class TimerStore {
     }
 
     private func tick() {
+        // No timers, nothing to redraw: avoids re-rendering the whole app four times a second.
+        guard !timers.isEmpty else { return }
         let now = Date()
         self.now = now
         for index in timers.indices where timers[index].isFinished(at: now) && !timers[index].hasAlerted {
