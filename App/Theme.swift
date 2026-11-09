@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Cook Mode's warm palette and type. Fixed colours (no dark variants): Cook Mode always shows
-/// dark-brown ink on cream, so it reads the same in any light.
+/// Cook Mode's warm palette and type, from reference-design.png. Fixed colours (no dark
+/// variants): Cook Mode always shows dark-brown ink on cream, so it reads the same in any light.
 enum Theme {
-    /// The one page colour behind everything, across both panes and the hinge.
+    /// The one page colour behind everything, across both halves and the hinge.
     static let backgroundUI = UIColor(hex: 0xFDF6E9)
     static let background = Color(backgroundUI)
     static let card = Color(hex: 0xFFFFFF)
@@ -24,11 +24,8 @@ enum Theme {
 
     /// Recipe title: New York Bold.
     static func title(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .serif) }
-    /// Current step: SF Pro Text, 20 pt, never smaller.
-    static let stepSize: CGFloat = 20
-    static let step = Font.system(size: stepSize, weight: .medium)
-    /// Extra space between step lines for a 1.4 line height (SF Pro's own is about 1.2).
-    static let stepLineSpacing: CGFloat = stepSize * 0.2
+    /// Current step: large SF Pro, readable from across the counter.
+    static func step(compact: Bool) -> Font { .system(size: compact ? 26 : 38, weight: .regular) }
     /// Timer numbers: SF Pro Rounded with tabular figures.
     static func timer(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .rounded).monospacedDigit() }
 }
@@ -44,19 +41,17 @@ extension UIColor {
     }
 }
 
-/// A small uppercase section label, e.g. COOK MODE or TIMERS.
+/// A small, letter-spaced uppercase label: COOK MODE, TIMERS, QUICK TIMER, INGREDIENTS.
 struct SectionLabel: View {
     let text: String
-    var systemImage: String?
-    var font: Font = .subheadline.weight(.heavy)
+    var color = Theme.label
+    var font: Font = .subheadline.weight(.semibold)
 
     var body: some View {
-        HStack(spacing: 6) {
-            if let systemImage { Image(systemName: systemImage) }
-            Text(text.uppercased()).tracking(1.2)
-        }
-        .font(font)
-        .foregroundStyle(Theme.label)
+        Text(text.uppercased())
+            .tracking(2)
+            .font(font)
+            .foregroundStyle(color)
     }
 }
 

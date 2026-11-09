@@ -1,10 +1,14 @@
 import SwiftUI
 import CookCore
 
+/// The timers half, as in reference-design.png: TIMERS, "Always on this side", running timers,
+/// QUICK TIMER pills and the converter, straight on the cream page (no pane card).
 struct TimersPane: View {
     let compact: Bool
-    /// Short pane: tighter spacing and one-line timer rows.
+    /// Short pane: tighter spacing, one row of presets and one-line timer rows.
     var dense = false
+    /// Tall pane (iPad): room for the explanatory line under the title.
+    var roomy = false
     @Environment(TimerStore.self) private var store
     @State private var name = ""
     @State private var minutes = 5
@@ -14,28 +18,41 @@ struct TimersPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: dense ? 6 : (compact ? 8 : 12)) {
-            HStack {
-                SectionLabel(text: "Timers", systemImage: "timer", font: .title3.weight(.heavy))
-                    .accessibilityElement(children: .combine)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Timers")
                     .accessibilityIdentifier("timersHeader")
                 Spacer()
                 if !store.timers.isEmpty {
-                    Text("\(store.timers.count) active").foregroundStyle(Theme.muted)
+                    Text("\(store.timers.count) active").font(.subheadline).foregroundStyle(Theme.muted)
+                }
+            }
+            if !compact {
+                Text("Always on this side")
+                    .font(Theme.title(28))
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if roomy {
+                    Text("Change steps, check ingredients — these never leave the screen.")
+                        .font(.body)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            addBar
+            quickTimers
 
             ScrollView {
-                VStack(spacing: dense ? 6 : 10) {
+                VStack(alignment: .leading, spacing: dense ? 6 : 10) {
                     if store.timers.isEmpty {
-                        Text("No timers yet. Tap a preset, or start one from a step.")
+                        Text("No timers yet. Tap a quick timer, or start one from a step.")
                             .foregroundStyle(Theme.ink)
-                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                     }
                     ForEach(store.timers) { timer in
                         TimerCard(timer: timer, now: store.now, compact: compact, dense: dense)
                     }
+                    customTimer
+                        .padding(.top, 6)
                     ConverterView()
                         .padding(.top, 6)
                 }
@@ -43,46 +60,69 @@ struct TimersPane: View {
             }
         }
         .padding(compact ? 12 : 20)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timersCard")
     }
 
-    /// Name + minutes + Start, and one-tap presets that start right away (using the name, if typed).
-    private var addBar: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("Name (optional)", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.done)
-                    .focused($nameFocused)
-                    .accessibilityIdentifier("timerName")
-                HStack(spacing: 2) {
-                    Text("\(minutes)m").font(.headline).monospacedDigit().foregroundStyle(Theme.ink).frame(minWidth: 36)
-                    Stepper("Minutes", value: $minutes, in: 1...600)
-                        .labelsHidden()
-                        .accessibilityIdentifier("timerMinutes")
-                }
-                Button {
-                    start(minutes)
-                } label: {
-                    Text("Start").font(.headline).padding(.horizontal, 16).frame(minHeight: 36)
-                }
-                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
-                .accessibilityIdentifier("startCustomTimer")
-            }
+    /// QUICK TIMER: black pills that start right away (using the name, if typed). Wrapped like
+    /// the reference; one row when the pane is short.
+    @ViewBuilder
+    private var quickTimers: some View {
+        if dense {
             HStack(spacing: 6) {
                 ForEach(Self.presets, id: \.self) { preset in
-                    Button {
-                        start(preset)
-                    } label: {
-                        Text("\(preset)m").font(.headline).frame(maxWidth: .infinity, minHeight: dense ? 26 : 36)
-                    }
-                    .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
-                    .accessibilityLabel("Start \(preset) minute timer")
-                    .accessibilityIdentifier("preset_\(preset)")
+                    presetButton(preset, title: "\(preset)m")
+                        .frame(maxWidth: .infinity)
                 }
             }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "Quick timer", color: Theme.muted)
+                FlowLayout(spacing: 10) {
+                    ForEach(Self.presets, id: \.self) { preset in
+                        presetButton(preset, title: "\(preset) min")
+                    }
+                }
+            }
+        }
+    }
+
+    private func presetButton(_ preset: Int, title: String) -> some View {
+        Button {
+            start(preset)
+        } label: {
+            Text(title)
+                .font(.headline)
+                .lineLimit(1)
+                .padding(.horizontal, dense ? 6 : 18)
+                .frame(maxWidth: dense ? .infinity : nil, minHeight: dense ? 32 : 44)
+        }
+        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+        .accessibilityLabel("Start \(preset) minute timer")
+        .accessibilityIdentifier("preset_\(preset)")
+    }
+
+    /// Any length, with an optional name.
+    private var customTimer: some View {
+        HStack(spacing: 8) {
+            TextField("Name (optional)", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .focused($nameFocused)
+                .accessibilityIdentifier("timerName")
+            HStack(spacing: 2) {
+                Text("\(minutes)m").font(.headline).monospacedDigit().foregroundStyle(Theme.ink).frame(minWidth: 36)
+                Stepper("Minutes", value: $minutes, in: 1...600)
+                    .labelsHidden()
+                    .accessibilityIdentifier("timerMinutes")
+            }
+            Button {
+                start(minutes)
+            } label: {
+                Text("Start").font(.headline).padding(.horizontal, 16).frame(minHeight: 36)
+            }
+            .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+            .accessibilityIdentifier("startCustomTimer")
         }
     }
 
@@ -90,6 +130,48 @@ struct TimersPane: View {
         store.add(name: name, minutes: minutes)
         name = ""
         nameFocused = false
+    }
+}
+
+/// Lays children out left to right and wraps to a new line when the row is full.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let height = rows.last.map { $0.y + $0.height } ?? 0
+        let width = rows.map { $0.width }.max() ?? 0
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+        }
+    }
+
+    private struct Row { var indices: [Int] = []; var y: CGFloat = 0; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var row = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            if !row.indices.isEmpty && row.width + spacing + size.width > width {
+                rows.append(row)
+                row = Row(y: row.y + row.height + spacing)
+            }
+            row.width += (row.indices.isEmpty ? 0 : spacing) + size.width
+            row.height = max(row.height, size.height)
+            row.indices.append(index)
+        }
+        if !row.indices.isEmpty { rows.append(row) }
+        return rows
     }
 }
 
@@ -132,7 +214,7 @@ struct TimerCard: View {
                 .padding(12)
             }
         }
-        .background(done ? Color.red.opacity(0.18) : Theme.beige,
+        .background(done ? Color.red.opacity(0.18) : Theme.card,
                     in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
     }
@@ -177,7 +259,7 @@ struct TimerCard: View {
                 .font(.title3.bold())
                 .foregroundStyle(Theme.ink)
                 .frame(width: size, height: size)
-                .background(Theme.card, in: Circle())
+                .background(Theme.beige, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -186,21 +268,21 @@ struct TimerCard: View {
     }
 }
 
+/// CONVERT: an always-open white card, as in reference-design.png.
 struct ConverterView: View {
-    @State private var expanded = false
     @State private var category: ConversionCategory = .volume
     @State private var input = "1"
     @State private var from: CookingUnit = .cup
     @State private var to: CookingUnit = .milliliter
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 10) {
-                Picker("Type", selection: $category) {
-                    ForEach(ConversionCategory.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: category) { _, newValue in
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(text: "Convert", color: Theme.muted)
+            Picker("Type", selection: $category) {
+                ForEach(ConversionCategory.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: category) { _, newValue in
                     switch newValue {
                     case .volume: from = .cup; to = .milliliter
                     case .weight: from = .ounce; to = .gram
@@ -208,35 +290,33 @@ struct ConverterView: View {
                     }
                 }
 
-                HStack(spacing: 6) {
-                    TextField("1 1/2", text: $input)
-                        .keyboardType(.numbersAndPunctuation)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 90)
-                        .accessibilityIdentifier("converterInput")
-                    unitPicker("From", selection: $from)
-                    Button {
-                        swap(&from, &to)
-                    } label: {
-                        Image(systemName: "arrow.left.arrow.right")
-                    }
-                    .accessibilityLabel("Swap units")
-                    unitPicker("To", selection: $to)
+            HStack(spacing: 6) {
+                TextField("1 1/2", text: $input)
+                    .keyboardType(.numbersAndPunctuation)
+                    .font(.title3)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: 110, minHeight: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.beige, lineWidth: 2))
+                    .accessibilityIdentifier("converterInput")
+                unitPicker("From", selection: $from)
+                Button {
+                    swap(&from, &to)
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right").frame(width: 36, height: 36)
                 }
-
-                Text(result)
-                    .font(.title2.bold())
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.ink)
-                    .accessibilityIdentifier("converterResult")
+                .buttonStyle(SoftButtonStyle(circle: true))
+                .accessibilityLabel("Swap units")
+                unitPicker("To", selection: $to)
             }
-            .padding(.top, 8)
-        } label: {
-            Label("Converter", systemImage: "scalemass").font(.headline).foregroundStyle(Theme.ink)
+
+            Text(result)
+                .font(Theme.timer(28))
+                .foregroundStyle(Theme.ink)
+                .accessibilityIdentifier("converterResult")
         }
         .tint(Theme.ink)
-        .padding(12)
-        .background(Theme.beige, in: RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
     private var result: String {

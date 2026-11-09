@@ -14,7 +14,8 @@ func ingredientLine(_ item: Ingredient, servingsFrom base: Int, to servings: Int
 /// - Otherwise, wide (landscape, iPad): recipe left, timers right, 50/50.
 /// - Otherwise, tall (closed Duo, portrait phone): recipe step on top, timers below, 50/50.
 /// Off the Duo split, a clear gap runs down the middle so no button sits on the centre line.
-/// One cream page runs under both cards and the gap; the two cards are always the same size.
+/// Styled after reference-design.png: one cream page under both halves and the gap, with nothing
+/// drawn on the hinge; the two halves are always the same size.
 struct CookModeView: View {
     let recipe: Recipe
     @Environment(TimerStore.self) private var timers
@@ -29,6 +30,8 @@ struct CookModeView: View {
     static let hingeGap: CGFloat = 28
     /// Below this timers-pane height, timers switch to one-line rows so several stay visible.
     static let densePaneHeight: CGFloat = 420
+    /// From this timers-pane height up there's room for the line under "Always on this side".
+    static let roomyPaneHeight: CGFloat = 760
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -73,7 +76,8 @@ struct CookModeView: View {
                     .environment(\.colorScheme, .light),
                     secondary: GeometryReader { pane in
                         TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
-                                   dense: pane.size.height - 2 * margin < Self.densePaneHeight)
+                                   dense: pane.size.height - 2 * margin < Self.densePaneHeight,
+                                   roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight)
                             .padding(margin)
                     }
                     .environment(timers)
@@ -108,7 +112,8 @@ struct CookModeView: View {
                         .frame(width: cardWidth)
                     HingeGap().frame(width: Self.hingeGap)
                     TimersPane(compact: compact,
-                               dense: size.height - insets.top - insets.bottom - 2 * margin < Self.densePaneHeight)
+                               dense: size.height - insets.top - insets.bottom - 2 * margin < Self.densePaneHeight,
+                               roomy: size.height - insets.top - insets.bottom - 2 * margin >= Self.roomyPaneHeight)
                         .frame(width: cardWidth)
                 }
                 .padding(.top, insets.top + margin)
@@ -140,18 +145,19 @@ struct CookModeView: View {
 
     private func recipePane(compact: Bool) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
-        return VStack(spacing: compact ? 8 : 14) {
-            header
-            ProgressView(value: Double(min(stepIndex + 1, max(steps.count, 1))), total: Double(max(steps.count, 1)))
-                .tint(Theme.accent)
-                .scaleEffect(x: 1, y: 2, anchor: .center)
+        return VStack(alignment: .leading, spacing: compact ? 8 : 14) {
+            header(compact: compact)
+            Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
+                .font(.headline.weight(.regular))
+                .foregroundStyle(Theme.muted)
+                .accessibilityIdentifier("stepProgressLabel")
+            StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
                 .accessibilityIdentifier("stepProgress")
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: compact ? 14 : 22) {
                     Text(step?.text ?? "This recipe has no steps yet.")
-                        .font(Theme.step)
-                        .lineSpacing(Theme.stepLineSpacing)
+                        .font(Theme.step(compact: compact))
                         .foregroundStyle(Theme.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -161,11 +167,12 @@ struct CookModeView: View {
                         Button {
                             timers.add(name: "Step \(stepIndex + 1)", minutes: minutes)
                         } label: {
-                            Label("Start \(minutes) min timer", systemImage: "timer")
-                                .font(.title3.bold())
-                                .frame(maxWidth: .infinity, minHeight: 50)
+                            Label("Start \(minutes) min timer", systemImage: "play.fill")
+                                .font(.title3.weight(.semibold))
+                                .padding(.horizontal, 22)
+                                .frame(minHeight: 52)
                         }
-                        .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
+                        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
                         .accessibilityIdentifier("startStepTimer")
                     }
 
@@ -177,7 +184,6 @@ struct CookModeView: View {
             navigationButtons(compact: compact)
         }
         .padding(compact ? 12 : 20)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay {
             if finished {
                 finishedOverlay
@@ -187,37 +193,35 @@ struct CookModeView: View {
         .accessibilityIdentifier("recipeCard")
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.title3.bold())
-                    .frame(width: 44, height: 44)
+    /// COOK MODE with servings on the right, then the recipe title (as in reference-design.png).
+    private func header(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 4 : 8) {
+            HStack(spacing: 10) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(SoftButtonStyle(circle: true))
+                .accessibilityLabel("Exit Cook Mode")
+                .accessibilityIdentifier("exitCook")
+                SectionLabel(text: "Cook Mode")
+                Spacer(minLength: 4)
+                servingsControl
             }
-            .buttonStyle(SoftButtonStyle(circle: true))
-            .accessibilityLabel("Exit Cook Mode")
-            .accessibilityIdentifier("exitCook")
-
-            VStack(alignment: .leading, spacing: 2) {
-                SectionLabel(text: "Cook Mode", font: .caption.weight(.heavy))
-                Text(recipe.title)
-                    .font(Theme.title(20))
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(1)
-                Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(Theme.muted)
-                    .accessibilityIdentifier("stepProgressLabel")
-            }
-            Spacer(minLength: 4)
-            servingsControl
+            Text(recipe.title)
+                .font(Theme.title(compact ? 24 : 32))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
     }
 
+    /// A beige pill: white − and + circles around "N servings".
     private var servingsControl: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Button {
                 servings = max(1, servings - 1)
             } label: {
@@ -226,13 +230,12 @@ struct CookModeView: View {
             .accessibilityLabel("Fewer servings")
             .accessibilityIdentifier("servingsMinus")
 
-            VStack(spacing: 0) {
-                Text("\(servings)").font(.title3.bold()).monospacedDigit().foregroundStyle(Theme.ink)
-                Text("servings").font(.caption2).foregroundStyle(Theme.muted)
-            }
-            .frame(minWidth: 48)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("servingsLabel")
+            Text("\(servings) servings")
+                .font(.headline.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.ink)
+                .fixedSize()
+                .accessibilityIdentifier("servingsLabel")
 
             Button {
                 servings = min(99, servings + 1)
@@ -242,22 +245,23 @@ struct CookModeView: View {
             .accessibilityLabel("More servings")
             .accessibilityIdentifier("servingsPlus")
         }
-        .buttonStyle(SoftButtonStyle(circle: true))
+        .buttonStyle(SoftButtonStyle(fill: Theme.card, circle: true))
+        .padding(4)
+        .background(Theme.beige, in: Capsule())
     }
 
     private var ingredientChecklist: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)")
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
-                .padding(.top, 8)
+            SectionLabel(text: servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)",
+                         color: Theme.muted)
+                .padding(.top, 4)
             ForEach(Array(recipe.sortedIngredients.enumerated()), id: \.element.id) { index, item in
                 let done = checked.contains(item.persistentModelID)
                 Button {
                     if done { checked.remove(item.persistentModelID) } else { checked.insert(item.persistentModelID) }
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                        Image(systemName: done ? "checkmark.square.fill" : "square")
                             .font(.title2)
                             .foregroundStyle(done ? Theme.accent : Theme.muted)
                             .accessibilityHidden(true)
@@ -278,14 +282,16 @@ struct CookModeView: View {
         }
     }
 
+    /// A narrow beige Back and a wide orange Next step.
     private func navigationButtons(compact: Bool) -> some View {
         let height: CGFloat = compact ? 56 : 76
         return HStack(spacing: 12) {
             Button {
                 withAnimation { stepIndex = max(0, stepIndex - 1) }
             } label: {
-                Label("Back", systemImage: "chevron.left")
-                    .frame(maxWidth: .infinity, minHeight: height)
+                Label("Back", systemImage: "arrow.left")
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: height)
             }
             .buttonStyle(SoftButtonStyle())
             .disabled(stepIndex == 0)
@@ -296,6 +302,7 @@ struct CookModeView: View {
                     withAnimation { finished = true }
                 } label: {
                     Label("Finish", systemImage: "checkmark")
+                        .labelStyle(TrailingIconLabelStyle())
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
                 .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
@@ -304,7 +311,7 @@ struct CookModeView: View {
                 Button {
                     withAnimation { stepIndex += 1 }
                 } label: {
-                    Label("Next", systemImage: "chevron.right")
+                    Label("Next step", systemImage: "arrow.right")
                         .labelStyle(TrailingIconLabelStyle())
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
@@ -312,7 +319,9 @@ struct CookModeView: View {
                 .accessibilityIdentifier("nextStep")
             }
         }
-        .font(.title2.bold())
+        .font(.title2.weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     private var finishedOverlay: some View {
@@ -338,7 +347,25 @@ struct CookModeView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .background(Theme.background)
+    }
+}
+
+/// Orange fill on a beige track, rounded.
+private struct StepProgressBar: View {
+    let value: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.beige)
+                Capsule().fill(Theme.accent).frame(width: geo.size.width * min(max(value, 0), 1))
+            }
+        }
+        .frame(height: 8)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
     }
 }
 
