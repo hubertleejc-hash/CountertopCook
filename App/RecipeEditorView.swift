@@ -75,6 +75,19 @@ struct RecipeEditorView: View {
                     }
                     .accessibilityIdentifier("addStep")
                 }
+
+                // Also at the bottom: on some devices the top bar scrolls away with a long form.
+                Section {
+                    Button {
+                        save()
+                    } label: {
+                        Text("Save Recipe").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!draft.canSave)
+                    .listRowInsets(EdgeInsets())
+                    .accessibilityIdentifier("saveRecipeBottom")
+                }
             }
             .navigationTitle(recipe == nil ? "New Recipe" : "Edit Recipe")
             .navigationBarTitleDisplayMode(.inline)
@@ -91,14 +104,16 @@ struct RecipeEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        draft.save(into: recipe, context: context)
-                        dismiss()
-                    }
+                    Button("Save") { save() }
                     .disabled(!draft.canSave)
                     .accessibilityIdentifier("saveRecipe")
                 }
             }
         }
+    }
+
+    private func save() {
+        draft.save(into: recipe, context: context)
+        dismiss()
     }
 }

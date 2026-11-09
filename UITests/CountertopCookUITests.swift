@@ -35,9 +35,9 @@ final class CountertopCookUITests: XCTestCase {
         type("Eat while warm.", into: "stepText_2")
         hideKeyboard()
         snapshot("editor-before-save")
-        // iOS 27.1 on iPhone Duo can drop the toolbar item's identifier; fall back to its label.
+                // The toolbar Save can scroll out of reach on some devices; the form also has one at the bottom.
         let save = element("saveRecipe")
-        (save.waitForExistence(timeout: 3) ? save : app.buttons["Save"].firstMatch).tap()
+        (save.waitForExistence(timeout: 3) && save.isHittable ? save : element("saveRecipeBottom")).tap()
 
         openCookMode("Test Toast")
         XCTAssertEqual(element("stepProgressLabel").label, "Step 1 of 3")
@@ -189,7 +189,10 @@ final class CountertopCookUITests: XCTestCase {
         // down the side instead of across the top.
         let statusBar = XCUIApplication(bundleIdentifier: "com.apple.springboard").statusBars.firstMatch
         let headerIDs = ["exitCook", "servingsPlus", "servingsMinus"]
-        if statusBar.exists, !statusBar.frame.isEmpty {
+        // Only trust the reported frame when it looks like a normal top bar: on iPhone Duo it
+        // comes back as a box that doesn't match where the bar is drawn.
+        let topBar = statusBar.exists && statusBar.frame.height < 80 && statusBar.frame.width >= window.width - 1
+        if topBar {
             for id in headerIDs {
                 XCTAssertFalse(element(id).frame.intersects(statusBar.frame),
                                "\(id) under the status bar in \(name): \(element(id).frame) vs \(statusBar.frame)")
