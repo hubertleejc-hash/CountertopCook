@@ -13,20 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    runs-on: macos-latest
+  # iPhone Duo on iOS 27.1. Needs the xcode-27 image (Apple silicon, public preview).
+  duo:
+    runs-on: xcode-27
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select newest Xcode
+      - name: Select Xcode 27.1
         run: |
-          ls -d /Applications/Xcode*.app
-          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          XCODE=/Applications/Xcode_27.1.app
+          if [ ! -d "$XCODE" ]; then
+            echo "::error::$XCODE not found on this runner. Installed:"; ls -d /Applications/Xcode*.app
+            exit 1
+          fi
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
+          xcodebuild -version | grep -q "^Xcode 27\.1" || { echo "::error::Expected Xcode 27.1"; exit 1; }
 
-      - name: Look for iPhone Duo / fold APIs and simulators
+      - name: Probe Xcode, iOS runtimes and iPhone Duo support
         run: |
           mkdir -p ci-output
           ci/probe-sdk.sh | tee ci-output/probe.txt
@@ -39,32 +44,70 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
-      - name: Build app and run UI tests on simulators
+      - name: Create iPhone Duo simulator (iOS 27.1)
+        run: ci/create-duo.sh
+
+      - name: Build app and run UI tests on iPhone Duo
+        env:
+          SIMULATOR_LIST_CMD: ci/create-duo.sh
         run: ci/run-ui-tests.sh
 
-      # Publishes screenshots and test summaries to the `ci-results` branch so they can be
-      # viewed without signing in (Actions artifacts and logs require a GitHub login).
-      - name: Publish screenshots and summaries to ci-results branch
+      # Screenshots and summaries go to a branch so they can be viewed without signing in.
+      - name: Publish screenshots and summaries to ci-results-duo branch
         if: always()
-        run: |
-          rm -rf /tmp/results && mkdir -p /tmp/results
-          cp -R ci-output/screenshots /tmp/results/ 2>/dev/null || true
-          cp ci-output/*.txt /tmp/results/ 2>/dev/null || true
-          for f in ci-output/test-*.log ci-output/build.log; do
-            [ -f "$f" ] && tail -n 400 "$f" > "/tmp/results/$(basename "$f")"
-          done
-          echo "${GITHUB_SHA} run ${GITHUB_RUN_ID}" > /tmp/results/COMMIT.txt
-          cd /tmp/results
-          git init -q -b ci-results
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add -A && git commit -q -m "CI results for ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ci/publish-results.sh ci-results-duo
 
       - name: Upload screenshots and test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-duo
+          path: ci-output
+          retention-days: 14
+
+  # Fallback: iPhone 17 Pro + iPad Pro 13-inch on the stable image. The xcode-27 image has
+  # no iPhone 17 Pro, and this job keeps working if the preview image is unavailable.
+  fallback:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Probe Xcode, iOS runtimes and iPhone Duo support
+        run: |
+          mkdir -p ci-output
+          ci/probe-sdk.sh | tee ci-output/probe.txt
+
+      - name: Core logic tests (fractions, scaling, converter, timers)
+        run: swift test --package-path CookCore
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build app and run UI tests on iPhone and iPad
+        run: ci/run-ui-tests.sh
+
+      - name: Publish screenshots and summaries to ci-results branch
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ci/publish-results.sh ci-results
+
+      - name: Upload screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-fallback
           path: ci-output
           retention-days: 14

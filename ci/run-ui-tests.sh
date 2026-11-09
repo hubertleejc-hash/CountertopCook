@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Builds the app once, then runs the UI test suite on each picked simulator.
+# Builds the app once, then runs the UI test suite on each simulator.
+# Simulators come from ci/pick_simulators.py, or from the command in $SIMULATOR_LIST_CMD
+# (for example ci/create-duo.sh). Each line is 'label|udid|name[|destination]'.
 # Screenshots land in ci-output/screenshots, result bundles in ci-output/*.xcresult.
 set -uo pipefail
 
@@ -8,7 +10,15 @@ OUT="$ROOT/ci-output"
 DERIVED="$ROOT/build/DerivedData"
 mkdir -p "$OUT/screenshots"
 
-python3 "$ROOT/ci/pick_simulators.py" | tee "$OUT/simulators.txt"
+if [ -n "${SIMULATOR_LIST_CMD:-}" ]; then
+  if ! $SIMULATOR_LIST_CMD > "$OUT/simulators.txt"; then
+    echo "::error::'$SIMULATOR_LIST_CMD' failed; not running UI tests on any other device."
+    exit 1
+  fi
+else
+  python3 "$ROOT/ci/pick_simulators.py" > "$OUT/simulators.txt" || exit 1
+fi
+cat "$OUT/simulators.txt"
 
 set -e
 xcodebuild build-for-testing \
@@ -25,15 +35,16 @@ if ! grep -q "TEST BUILD SUCCEEDED" "$OUT/build.log"; then
 fi
 
 status=0
-while IFS='|' read -r label udid name; do
+while IFS='|' read -r label udid name destination; do
   [ -z "$udid" ] && continue
-  echo "::group::UI tests on $name"
+  destination=${destination:-id=$udid}
+  echo "::group::UI tests on $name ($destination)"
   xcrun simctl boot "$udid" 2>/dev/null
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1
   TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" xcodebuild test-without-building \
     -project "$ROOT/CountertopCook.xcodeproj" \
     -scheme CountertopCook \
-    -destination "id=$udid" \
+    -destination "$destination" \
     -derivedDataPath "$DERIVED" \
     -resultBundlePath "$OUT/$label.xcresult" \
     > "$OUT/test-$label.log" 2>&1

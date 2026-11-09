@@ -1,5 +1,5 @@
-"""Prints 'label|udid|name' for the simulators to test on: one iPhone, one iPad,
-and every iPhone Duo / foldable device, all on the newest installed iOS runtime."""
+"""Prints 'label|udid|name' for the fallback simulators: one iPhone and one iPad on the
+newest installed iOS runtime. Foldables are skipped here; ci/create-duo.sh handles the Duo."""
 import json
 import re
 import subprocess
@@ -40,9 +40,6 @@ if iphone:
 ipad = pick([r"^iPad Pro 13", r"^iPad Pro", r"^iPad Air", r"^iPad"])
 if ipad:
     choices.append(("iPad", ipad))
-for d in devices:
-    if is_fold(d["name"]):
-        choices.append(("Duo", d))
 
 for label, d in choices:
     print(f"{label}|{d['udid']}|{d['name']} (iOS {version[0]}.{version[1]})")
