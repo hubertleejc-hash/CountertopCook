@@ -41,6 +41,12 @@ while IFS='|' read -r label udid name destination; do
   echo "::group::UI tests on $name ($destination)"
   xcrun simctl boot "$udid" 2>/dev/null
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1
+  # Warm up: the first launch on a freshly booted simulator can exceed XCUITest's launch timeout.
+  APP="$DERIVED/Build/Products/Debug-iphonesimulator/CountertopCook.app"
+  xcrun simctl install "$udid" "$APP" \
+    && xcrun simctl launch "$udid" com.hubertlee.countertopcook -uitesting >/dev/null \
+    && sleep 20 \
+    && xcrun simctl terminate "$udid" com.hubertlee.countertopcook
   TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" xcodebuild test-without-building \
     -project "$ROOT/CountertopCook.xcodeproj" \
     -scheme CountertopCook \

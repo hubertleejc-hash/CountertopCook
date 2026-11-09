@@ -118,14 +118,19 @@ final class CountertopCookUITests: XCTestCase {
 
     func testLayoutKeepsTimersVisibleAndCentreLineClear() {
         openCookMode("Pan-Seared Steak")
+        // Long timers on purpose: a timer finishing mid-test shows the "Timer done" alert,
+        // which covers every button and makes the visibility checks fail.
         element("preset_5").tap()
-        element("preset_1").tap()
+        element("preset_10").tap()
         checkLayout("portrait-step1")
         element("nextStep").tap()
         checkLayout("portrait-step2")
 
         XCUIDevice.shared.orientation = .landscapeLeft
-        sleep(2)
+        let window = app.windows.firstMatch
+        let rotated = NSPredicate { _, _ in window.frame.width > window.frame.height }
+        wait(for: [XCTNSPredicateExpectation(predicate: rotated, object: nil)], timeout: 10)
+        sleep(1)
         checkLayout("landscape-step2")
         element("nextStep").tap()
         checkLayout("landscape-step3")
@@ -168,7 +173,7 @@ final class CountertopCookUITests: XCTestCase {
         let window = app.windows.firstMatch.frame
         let next = element("nextStep").exists ? "nextStep" : "finishCooking"
         let mustBeVisible = ["exitCook", "stepProgressLabel", "stepText", "servingsPlus", "backStep", next,
-                             "timersHeader", "preset_5", "timerCountdown_5 min", "timerCountdown_1 min"]
+                             "timersHeader", "preset_5", "timerCountdown_5 min", "timerCountdown_10 min"]
         for id in mustBeVisible {
             let item = element(id)
             XCTAssertTrue(item.waitForExistence(timeout: 3), "\(id) missing in \(name)")

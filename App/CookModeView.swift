@@ -22,6 +22,8 @@ struct CookModeView: View {
 
     /// Width of the empty strip kept between the two panes (where a hinge would be).
     static let hingeGap: CGFloat = 28
+    /// Below this timers-pane height, timers switch to one-line rows so several stay visible.
+    static let densePaneHeight: CGFloat = 420
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -47,7 +49,8 @@ struct CookModeView: View {
                         .frame(width: max(0, size.width / 2 - half - insets.leading - margin))
                         .padding(.leading, insets.leading + margin)
                     HingeGap(vertical: true).frame(width: Self.hingeGap)
-                    TimersPane(compact: compact)
+                    TimersPane(compact: compact,
+                               dense: size.height - insets.top - insets.bottom - 2 * margin < Self.densePaneHeight)
                         .frame(width: max(0, size.width / 2 - half - insets.trailing - margin))
                         .padding(.trailing, insets.trailing + margin)
                 }
@@ -59,8 +62,9 @@ struct CookModeView: View {
                         .frame(height: max(0, size.height / 2 - half - insets.top - margin))
                         .padding(.top, insets.top + margin)
                     HingeGap(vertical: false).frame(height: Self.hingeGap)
-                    TimersPane(compact: compact)
-                        .frame(height: max(0, size.height / 2 - half - insets.bottom - margin))
+                    let timersHeight = max(0, size.height / 2 - half - insets.bottom - margin)
+                    TimersPane(compact: compact, dense: timersHeight < Self.densePaneHeight)
+                        .frame(height: timersHeight)
                         .padding(.bottom, insets.bottom + margin)
                 }
                 .padding(.leading, insets.leading + margin)
