@@ -38,8 +38,11 @@ while IFS='|' read -r label udid name; do
     -resultBundlePath "$OUT/$label.xcresult" \
     > "$OUT/test-$label.log" 2>&1
   result=$?
-  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|\*\* TEST" "$OUT/test-$label.log"
+  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
   echo "::endgroup::"
+  # Surface each failure as an annotation so it shows on the run page.
+  grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \
+    | while IFS= read -r line; do echo "::error::[$label] $line"; done
   if [ $result -ne 0 ]; then
     echo "::error::UI tests failed on $name"
     status=1
