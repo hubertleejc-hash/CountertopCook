@@ -1,0 +1,210 @@
+import SwiftUI
+import CookCore
+
+struct TimersPane: View {
+    let compact: Bool
+    @Environment(TimerStore.self) private var store
+    @State private var name = ""
+    @State private var minutes = 5
+    @FocusState private var nameFocused: Bool
+
+    private static let presets = [1, 5, 10, 15, 30]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+            HStack {
+                Label("Timers", systemImage: "timer")
+                    .font(.title2.bold())
+                    .accessibilityIdentifier("timersHeader")
+                Spacer()
+                if !store.timers.isEmpty {
+                    Text("\(store.timers.count) active").foregroundStyle(.secondary)
+                }
+            }
+
+            addBar
+
+            ScrollView {
+                VStack(spacing: 10) {
+                    if store.timers.isEmpty {
+                        Text("No timers yet. Tap a preset, or start one from a step.")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    ForEach(store.timers) { timer in
+                        TimerCard(timer: timer, now: store.now, compact: compact)
+                    }
+                    ConverterView()
+                        .padding(.top, 6)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(compact ? 12 : 20)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    /// Name + minutes + Start, and one-tap presets that start right away (using the name, if typed).
+    private var addBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("Name (optional)", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.done)
+                    .focused($nameFocused)
+                    .accessibilityIdentifier("timerName")
+                HStack(spacing: 2) {
+                    Text("\(minutes)m").font(.headline).monospacedDigit().frame(minWidth: 36)
+                    Stepper("Minutes", value: $minutes, in: 1...600)
+                        .labelsHidden()
+                        .accessibilityIdentifier("timerMinutes")
+                }
+                Button("Start") { start(minutes) }
+                    .buttonStyle(.borderedProminent)
+                    .font(.headline)
+                    .accessibilityIdentifier("startCustomTimer")
+            }
+            HStack(spacing: 6) {
+                ForEach(Self.presets, id: \.self) { preset in
+                    Button {
+                        start(preset)
+                    } label: {
+                        Text("\(preset)m").font(.headline).frame(maxWidth: .infinity, minHeight: 36)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Start \(preset) minute timer")
+                    .accessibilityIdentifier("preset_\(preset)")
+                }
+            }
+        }
+    }
+
+    private func start(_ minutes: Int) {
+        store.add(name: name, minutes: minutes)
+        name = ""
+        nameFocused = false
+    }
+}
+
+struct TimerCard: View {
+    let timer: CookTimer
+    let now: Date
+    let compact: Bool
+    @Environment(TimerStore.self) private var store
+
+    var body: some View {
+        let done = timer.isFinished(at: now)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(timer.name).font(.headline).lineLimit(1)
+                Spacer()
+                if done {
+                    Text("Done!").font(.headline).foregroundStyle(.red)
+                } else if timer.isPaused {
+                    Text("Paused").font(.subheadline.bold()).foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 8) {
+                Text(TimeFormat.countdown(timer.remaining(at: now)))
+                    .font(.system(size: compact ? 40 : 56, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(done ? Color.red : (timer.isPaused ? Color.secondary : Color.primary))
+                    .accessibilityIdentifier("timerCountdown_\(timer.name)")
+                Spacer(minLength: 4)
+                if !done {
+                    iconButton(timer.isPaused ? "play.fill" : "pause.fill",
+                               label: timer.isPaused ? "Resume" : "Pause",
+                               id: "timerPause_\(timer.name)") { store.togglePause(timer.id) }
+                }
+                iconButton("goforward.plus", label: "Add 1 minute", id: "timerAddMinute_\(timer.name)") {
+                    store.addMinute(timer.id)
+                }
+                iconButton("xmark", label: done ? "Dismiss" : "Cancel", id: "timerCancel_\(timer.name)") {
+                    store.cancel(timer.id)
+                }
+            }
+        }
+        .padding(12)
+        .background(done ? Color.red.opacity(0.18) : Color(.tertiarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func iconButton(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.title3.bold())
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+    }
+}
+
+struct ConverterView: View {
+    @State private var expanded = false
+    @State private var category: ConversionCategory = .volume
+    @State private var input = "1"
+    @State private var from: CookingUnit = .cup
+    @State private var to: CookingUnit = .milliliter
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Type", selection: $category) {
+                    ForEach(ConversionCategory.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: category) { _, newValue in
+                    switch newValue {
+                    case .volume: from = .cup; to = .milliliter
+                    case .weight: from = .ounce; to = .gram
+                    case .temperature: from = .fahrenheit; to = .celsius
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    TextField("1 1/2", text: $input)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 90)
+                        .accessibilityIdentifier("converterInput")
+                    unitPicker("From", selection: $from)
+                    Button {
+                        swap(&from, &to)
+                    } label: {
+                        Image(systemName: "arrow.left.arrow.right")
+                    }
+                    .accessibilityLabel("Swap units")
+                    unitPicker("To", selection: $to)
+                }
+
+                Text(result)
+                    .font(.title2.bold())
+                    .monospacedDigit()
+                    .accessibilityIdentifier("converterResult")
+            }
+            .padding(.top, 8)
+        } label: {
+            Label("Converter", systemImage: "scalemass").font(.headline)
+        }
+        .padding(12)
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var result: String {
+        guard let value = Converter.convert(text: input, from: from, to: to) else { return "Enter a number" }
+        return "= \(Converter.format(value)) \(to.rawValue)"
+    }
+
+    private func unitPicker(_ title: String, selection: Binding<CookingUnit>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(category.units) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+    }
+}
