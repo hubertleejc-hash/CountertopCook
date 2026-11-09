@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// End-to-end checks for the v1 acceptance tests. Each launch uses a fresh in-memory store
 /// seeded with the three starter recipes (see `-uitesting` in the app).
@@ -310,7 +311,12 @@ final class CountertopCookUITests: XCTestCase {
     }
 
     private func snapshot(_ name: String) {
-        let shot = XCUIScreen.main.screenshot()
+        // An unfolded Duo shows the app on its inner display, while `XCUIScreen.main` can still
+        // be the outer one, now off and black. Keep the screen that shows something.
+        let shots = XCUIScreen.screens.map { $0.screenshot() }
+        let shot = shots.first(where: { !isBlank($0.image) }) ?? XCUIScreen.main.screenshot()
+        XCTAssertFalse(isBlank(shot.image),
+                       "Screenshot \(name) is blank on all \(shots.count) screen(s); the app isn't visible")
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -321,5 +327,28 @@ final class CountertopCookUITests: XCTestCase {
             let url = URL(fileURLWithPath: dir).appendingPathComponent("\(device)-\(name).png")
             try? shot.pngRepresentation.write(to: url)
         }
+    }
+
+    /// True when the image is a single flat colour (a screen that's off renders solid black).
+    private func isBlank(_ image: UIImage) -> Bool {
+        guard let cg = image.cgImage else { return true }
+        let side = 32
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: side, height: side,
+                                          bitsPerComponent: 8, bytesPerRow: side * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+            else { return false }
+            context.interpolationQuality = .medium
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drawn else { return true }
+        var lo: UInt8 = 255, hi: UInt8 = 0
+        for (i, value) in pixels.enumerated() where i % 4 != 3 {
+            lo = min(lo, value); hi = max(hi, value)
+        }
+        return hi - lo < 8
     }
 }
