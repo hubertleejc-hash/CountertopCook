@@ -11,7 +11,7 @@ DEST=$(mktemp -d)
 cp -R "$SRC/screenshots" "$DEST/" 2>/dev/null || true
 cp "$SRC"/*.txt "$DEST/" 2>/dev/null || true
 for f in "$SRC"/test-*.log "$SRC"/build.log; do
-  [ -f "$f" ] && tail -n 400 "$f" > "$DEST/$(basename "$f")"
+  [ -f "$f" ] && tail -n 5000 "$f" > "$DEST/$(basename "$f")"
 done
 echo "${GITHUB_SHA} run ${GITHUB_RUN_ID}" > "$DEST/COMMIT.txt"
 

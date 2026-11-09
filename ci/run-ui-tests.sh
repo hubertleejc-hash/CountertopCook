@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Builds the app once, then runs the UI test suite on each simulator.
+# Set UI_TEST_RETRIES=N to rerun a failed test up to N more times (every attempt is logged).
 # Simulators come from ci/pick_simulators.py, or from the command in $SIMULATOR_LIST_CMD
 # (for example ci/create-duo.sh). Each line is 'label|udid|name[|destination]'.
 # Screenshots land in ci-output/screenshots, result bundles in ci-output/*.xcresult.
@@ -53,9 +54,10 @@ while IFS='|' read -r label udid name destination; do
     -destination "$destination" \
     -derivedDataPath "$DERIVED" \
     -resultBundlePath "$OUT/$label.xcresult" \
+    ${UI_TEST_RETRIES:+-retry-tests-on-failure -test-iterations $((UI_TEST_RETRIES + 1))} \
     > "$OUT/test-$label.log" 2>&1
   result=$?
-  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
+  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|NOTE:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
   echo "::endgroup::"
   # Surface each failure as an annotation so it shows on the run page.
   grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \

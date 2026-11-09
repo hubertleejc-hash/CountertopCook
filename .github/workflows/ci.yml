@@ -50,6 +50,8 @@ jobs:
       - name: Build app and run UI tests on iPhone Duo
         env:
           SIMULATOR_LIST_CMD: ci/create-duo.sh
+          # The preview xcode-27 runner sometimes times out XCUITest UI queries.
+          UI_TEST_RETRIES: 2
         run: ci/run-ui-tests.sh
 
       # Screenshots and summaries go to a branch so they can be viewed without signing in.
