@@ -78,10 +78,14 @@ struct RecipeListView: View {
                 }
             }
             if let importError {
-                Label(importError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .accessibilityIdentifier("importError")
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").accessibilityHidden(true)
+                    Text(importError)
+                }
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("importError")
             }
         } header: {
             Text("Import from link")

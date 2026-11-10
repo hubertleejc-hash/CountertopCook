@@ -90,7 +90,7 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertEqual(source.label, "Source: Test Kitchen")
         XCTAssertTrue(app.navigationBars["Weeknight Lemon Rice"].exists, "Wrong title")
         XCTAssertTrue(text(containing: "1 1/2 cup long-grain rice").exists)
-        XCTAssertTrue(text(containing: "1. Rinse the rice until the water runs clear.").exists)
+        // The steps are further down the recipe (off screen on a phone); Cook Mode checks them below.
         XCTAssertFalse(text(containing: "MUST NOT BE IMPORTED").exists, "Story or description text was imported")
         snapshot("imported-recipe")
 
