@@ -102,9 +102,7 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(element("ingredient_3").label.contains("500 ml vegetable stock"), element("ingredient_3").label)
         element("exitCook").tap()
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
-        // Back to the library. Not "first button in the bar": on the Duo that's Edit.
-        app.navigationBars.buttons.matching(NSPredicate(format: "identifier != 'editRecipe'")).firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Recipes"].waitForExistence(timeout: 5), "Didn't return to the library")
+        goBackToLibrary()
 
         // A page with no recipe card: a clear error, and nothing is added.
         scrollLibraryToTop()
@@ -313,6 +311,23 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "Missing field \(id)")
         field.tap()
         field.typeText(text)
+    }
+
+    /// Back from a recipe to the library. On the Duo the Back chevron sits in the side bar by the
+    /// status bar, outside the navigation bar element (only Edit is there), so look for it
+    /// anywhere on screen, else swipe from the edge.
+    private func goBackToLibrary() {
+        let back = app.buttons.matching(NSPredicate(
+            format: "identifier == 'BackButton' OR label == 'Back' OR label == 'Recipes'")).firstMatch
+        if back.waitForExistence(timeout: 2) && back.isHittable {
+            back.tap()
+        } else {
+            let buttons = app.buttons.allElementsBoundByIndex.map { "\($0.identifier)|\($0.label)" }
+            print("BACK: no Back button; buttons on screen: \(buttons)")
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 8, dy: 0))
+            start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+        }
+        XCTAssertTrue(app.navigationBars["Recipes"].waitForExistence(timeout: 5), "Didn't return to the library")
     }
 
     private func hideKeyboard() {
