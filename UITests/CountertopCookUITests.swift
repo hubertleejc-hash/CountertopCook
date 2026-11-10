@@ -102,7 +102,9 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(element("ingredient_3").label.contains("500 ml vegetable stock"), element("ingredient_3").label)
         element("exitCook").tap()
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // Back to the library. Not "first button in the bar": on the Duo that's Edit.
+        app.navigationBars.buttons.matching(NSPredicate(format: "identifier != 'editRecipe'")).firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Recipes"].waitForExistence(timeout: 5), "Didn't return to the library")
 
         // A page with no recipe card: a clear error, and nothing is added.
         scrollLibraryToTop()
