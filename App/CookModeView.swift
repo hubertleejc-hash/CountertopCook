@@ -69,15 +69,18 @@ struct CookModeView: View {
             return AnyView(
                 FoldSplitView(
                     primary: GeometryReader { pane in
-                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320)
+                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320, tight: true)
                             .padding(margin)
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light),
                     secondary: GeometryReader { pane in
+                        // Converter pinned at the bottom and one-line timer rows, so the whole
+                        // CONVERT card fits in the unfolded Duo's short half.
                         TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
-                                   dense: pane.size.height - 2 * margin < Self.densePaneHeight,
-                                   roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight)
+                                   dense: true,
+                                   roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
+                                   pinConverter: true)
                             .padding(margin)
                     }
                     .environment(timers)
@@ -143,19 +146,29 @@ struct CookModeView: View {
     private var steps: [RecipeStep] { recipe.sortedSteps }
     private var isLastStep: Bool { stepIndex >= steps.count - 1 }
 
-    private func recipePane(compact: Bool) -> some View {
+    /// `tight`: the unfolded Duo's short half. Same fonts, but less spacing, the step count
+    /// beside its bar and shorter Back / Next, so the ingredients show under a long step.
+    private func recipePane(compact: Bool, tight: Bool = false) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
-        return VStack(alignment: .leading, spacing: compact ? 8 : 14) {
+        let roomy = !compact && !tight
+        return VStack(alignment: .leading, spacing: roomy ? 14 : 8) {
             header(compact: compact)
-            Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
+            let progress = Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
                 .font(.headline.weight(.regular))
                 .foregroundStyle(Theme.muted)
+                .fixedSize()
                 .accessibilityIdentifier("stepProgressLabel")
-            StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
+            let bar = StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
                 .accessibilityIdentifier("stepProgress")
+            if tight {
+                HStack(spacing: 12) { progress; bar }
+            } else {
+                progress
+                bar
+            }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: compact ? 14 : 22) {
+                VStack(alignment: .leading, spacing: roomy ? 22 : 14) {
                     Text(step?.text ?? "This recipe has no steps yet.")
                         .font(Theme.step(compact: compact))
                         .foregroundStyle(Theme.ink)
@@ -181,9 +194,9 @@ struct CookModeView: View {
                 .padding(.vertical, 4)
             }
 
-            navigationButtons(compact: compact)
+            navigationButtons(compact: compact || tight)
         }
-        .padding(compact ? 12 : 20)
+        .padding(roomy ? 20 : 12)
         .overlay {
             if finished {
                 finishedOverlay

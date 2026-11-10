@@ -9,6 +9,8 @@ struct TimersPane: View {
     var dense = false
     /// Tall pane (iPad): room for the explanatory line under the title.
     var roomy = false
+    /// Keep CONVERT fully on screen below the scrolling timers (unfolded Duo's short half).
+    var pinConverter = false
     @Environment(TimerStore.self) private var store
     @State private var name = ""
     @State private var minutes = 5
@@ -53,10 +55,15 @@ struct TimersPane: View {
                     }
                     customTimer
                         .padding(.top, 6)
-                    ConverterView()
-                        .padding(.top, 6)
+                    if !pinConverter {
+                        ConverterView()
+                            .padding(.top, 6)
+                    }
                 }
                 .padding(.vertical, 2)
+            }
+            if pinConverter {
+                ConverterView()
             }
         }
         .padding(compact ? 12 : 20)

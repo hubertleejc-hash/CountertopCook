@@ -276,6 +276,19 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertEqual(first, second, accuracy: (vertical ? window.width : window.height) * 0.1,
                        "The split around the hinge is not 50/50 in \(name): \(hinge) in \(window)")
         checkEqualCards(name, sideBySide: vertical)
+        // Nothing cut off: the whole CONVERT card (input and result) and the first ingredients
+        // are on screen, not clipped by the bottom edge or hidden under Back / Next.
+        for id in ["converterInput", "converterResult"] {
+            let frame = element(id).frame
+            XCTAssertTrue(element(id).exists && window.contains(frame), "\(id) cut off in \(name): \(frame) in \(window)")
+        }
+        XCTAssertTrue(element("converterInput").isHittable, "Converter input not on screen in \(name)")
+        let nav = element("backStep").frame
+        for id in ["ingredient_0", "ingredient_1"] {
+            let row = element(id)
+            XCTAssertTrue(row.exists && row.isHittable, "\(id) not on screen in \(name)")
+            XCTAssertLessThanOrEqual(row.frame.maxY, nav.minY + 1, "\(id) runs under Back / Next in \(name): \(row.frame) vs \(nav)")
+        }
         // Nothing tappable on the hinge.
         for button in app.buttons.allElementsBoundByIndex where button.exists && button.isHittable {
             XCTAssertFalse(button.frame.intersects(hinge),
