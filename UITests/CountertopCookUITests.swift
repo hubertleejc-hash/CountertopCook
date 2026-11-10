@@ -2,7 +2,7 @@ import XCTest
 import UIKit
 
 /// End-to-end checks for the v1 acceptance tests. Each launch uses a fresh in-memory store
-/// seeded with the three starter recipes (see `-uitesting` in the app).
+/// seeded with the ten starter recipes (see `-uitesting` in the app).
 final class CountertopCookUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -53,6 +53,75 @@ final class CountertopCookUITests: XCTestCase {
         snapshot("finished")
         element("doneCooking").tap()
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5), "Should return to the recipe")
+    }
+
+    // MARK: Recipe sources: ten starters on first launch, deletable
+
+    func testTenStarterRecipesAndDelete() {
+        let starters = ["Pan-Seared Steak", "Garlic Butter Pasta", "Simple No-Knead Bread",
+                        "Fluffy Scrambled Eggs", "Easy Tomato Soup", "Chicken and Veg Stir-Fry",
+                        "Weekend Pancakes", "Sheet-Pan Roast Vegetables", "One-Pot Bean Chili",
+                        "Lemon Herb Chicken Thighs"]
+        for title in starters { findRow(title) }
+        snapshot("library-starters")
+
+        let victim = findRow("One-Pot Bean Chili")
+        victim.swipeLeft()
+        let delete = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "No Delete button after swiping the row")
+        delete.tap()
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: victim)
+        wait(for: [gone], timeout: 5)
+        findRow("Lemon Herb Chicken Thighs")
+    }
+
+    // MARK: Recipe sources: import from a link (pages served by CI from ci/fixtures)
+
+    func testImportFromLink() throws {
+        let base = try XCTUnwrap(ProcessInfo.processInfo.environment["IMPORT_FIXTURE_URL"],
+                                 "IMPORT_FIXTURE_URL is not set: ci/run-ui-tests.sh serves ci/fixtures for this test")
+        scrollLibraryToTop()
+        type("\(base)/recipe.html", into: "importLink")
+        element("importButton").tap()
+
+        // The recipe opens with its source, ingredients and steps.
+        let source = element("recipeSource")
+        XCTAssertTrue(source.waitForExistence(timeout: 30), "Import didn't open the recipe: \(errorText())")
+        XCTAssertEqual(source.label, "Source: Test Kitchen")
+        XCTAssertTrue(app.navigationBars["Weeknight Lemon Rice"].exists, "Wrong title")
+        XCTAssertTrue(text(containing: "1 1/2 cup long-grain rice").exists)
+        XCTAssertTrue(text(containing: "1. Rinse the rice until the water runs clear.").exists)
+        XCTAssertFalse(text(containing: "MUST NOT BE IMPORTED").exists, "Story or description text was imported")
+        snapshot("imported-recipe")
+
+        element("startCooking").tap()
+        XCTAssertTrue(element("stepText").waitForExistence(timeout: 5))
+        XCTAssertEqual(element("stepText").label, "Rinse the rice until the water runs clear.")
+        XCTAssertEqual(element("stepProgressLabel").label, "Step 1 of 4")
+        XCTAssertTrue(element("ingredient_0").label.contains("1 1/2 cup long-grain rice"), element("ingredient_0").label)
+        XCTAssertTrue(element("ingredient_3").label.contains("500 ml vegetable stock"), element("ingredient_3").label)
+        element("exitCook").tap()
+        XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // A page with no recipe card: a clear error, and nothing is added.
+        scrollLibraryToTop()
+        type("\(base)/no-recipe.html", into: "importLink")
+        element("importButton").tap()
+        let error = element("importError")
+        XCTAssertTrue(error.waitForExistence(timeout: 30), "No error for a page without recipe data")
+        XCTAssertTrue(error.label.contains("No recipe data found"), error.label)
+        XCTAssertFalse(element("recipeRow_Just a story").exists)
+        snapshot("import-error")
+    }
+
+    private func text(containing fragment: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", fragment)).firstMatch
+    }
+
+    private func errorText() -> String {
+        let error = element("importError")
+        return error.exists ? error.label : "no error shown"
     }
 
     // MARK: Acceptance test 4: two timers keep counting while changing steps
@@ -249,9 +318,26 @@ final class CountertopCookUITests: XCTestCase {
         if done.exists && done.isHittable { done.tap() }
     }
 
-    private func openCookMode(_ title: String) {
+    /// Scrolls the library down until the recipe's row is on screen (rows load lazily).
+    @discardableResult
+    private func findRow(_ title: String) -> XCUIElement {
         let row = element("recipeRow_\(title)")
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "Missing recipe \(title)")
+        _ = row.waitForExistence(timeout: 5)
+        for _ in 0..<12 where !(row.exists && row.isHittable) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(row.exists && row.isHittable, "Missing recipe \(title)")
+        return row
+    }
+
+    private func scrollLibraryToTop() {
+        for _ in 0..<12 where !element("importLink").isHittable {
+            app.swipeDown()
+        }
+    }
+
+    private func openCookMode(_ title: String) {
+        let row = findRow(title)
         row.tap()
         let start = element("startCooking")
         XCTAssertTrue(start.waitForExistence(timeout: 5))

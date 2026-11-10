@@ -5,10 +5,15 @@ struct RecipeListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Recipe.createdAt) private var recipes: [Recipe]
     @State private var showingNewRecipe = false
+    @State private var path: [Recipe] = []
+    @State private var link = ""
+    @State private var importing = false
+    @State private var importError: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
+                importSection
                 ForEach(recipes) { recipe in
                     NavigationLink(value: recipe) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -50,6 +55,54 @@ struct RecipeListView: View {
             }
         }
     }
+
+    /// Paste a recipe page's link; only its schema.org Recipe data is imported.
+    private var importSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                TextField("Paste a recipe link", text: $link)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit(startImport)
+                    .disabled(importing)
+                    .accessibilityIdentifier("importLink")
+                if importing {
+                    ProgressView().accessibilityIdentifier("importProgress")
+                } else {
+                    Button("Import", action: startImport)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityIdentifier("importButton")
+                }
+            }
+            if let importError {
+                Label(importError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("importError")
+            }
+        } header: {
+            Text("Import from link")
+        }
+    }
+
+    private func startImport() {
+        guard !importing, !link.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        importing = true
+        importError = nil
+        Task {
+            do {
+                let recipe = try await LinkImport.importRecipe(from: link, into: context)
+                link = ""
+                path.append(recipe)
+            } catch {
+                importError = error.localizedDescription
+            }
+            importing = false
+        }
+    }
 }
 
 func formatMinutes(_ minutes: Int) -> String {
@@ -76,6 +129,14 @@ struct RecipeDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .listRowInsets(EdgeInsets())
                 .accessibilityIdentifier("startCooking")
+            }
+            if let source = recipe.sourceURL, let url = URL(string: source) {
+                Section {
+                    Link(destination: url) {
+                        Label("Source: \(recipe.sourceName ?? url.host ?? source)", systemImage: "link")
+                    }
+                    .accessibilityIdentifier("recipeSource")
+                }
             }
             Section {
                 LabeledContent("Servings", value: "\(recipe.servings)")

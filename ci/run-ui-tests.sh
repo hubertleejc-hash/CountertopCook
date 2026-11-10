@@ -39,11 +39,26 @@ fi
 
 status=0
 
+# The link-import test fetches these pages over HTTP. The simulator shares this Mac's network,
+# so it reaches the server at 127.0.0.1 (an IP address, which App Transport Security allows).
+FIXTURE_PORT=8765
+python3 -m http.server "$FIXTURE_PORT" --bind 127.0.0.1 --directory "$ROOT/ci/fixtures" \
+  > "$OUT/fixture-server.log" 2>&1 &
+FIXTURE_PID=$!
+trap 'kill $FIXTURE_PID 2>/dev/null' EXIT
+for _ in $(seq 1 20); do
+  curl -sf "http://127.0.0.1:$FIXTURE_PORT/recipe.html" > /dev/null && break
+  sleep 0.5
+done
+curl -sf "http://127.0.0.1:$FIXTURE_PORT/recipe.html" > /dev/null \
+  || echo "::error::Fixture server for the link-import test didn't start"
+
 # run_tests <label> <name> <destination> <fold pose or ""> [xcodebuild args...]
 run_tests() {
   local label=$1 name=$2 destination=$3 pose=$4
   shift 4
-  TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" TEST_RUNNER_FOLD_POSE="$pose" xcodebuild test-without-building \
+  TEST_RUNNER_SCREENSHOT_DIR="$OUT/screenshots" TEST_RUNNER_FOLD_POSE="$pose" \
+    TEST_RUNNER_IMPORT_FIXTURE_URL="http://127.0.0.1:$FIXTURE_PORT" xcodebuild test-without-building \
     -project "$ROOT/CountertopCook.xcodeproj" \
     -scheme CountertopCook \
     -destination "$destination" \

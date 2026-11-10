@@ -7,6 +7,10 @@ final class Recipe {
     var servings: Int
     var totalMinutes: Int
     var createdAt: Date
+    /// Where an imported recipe came from (the page's URL and the site's name); nil for recipes
+    /// typed in or shipped with the app.
+    var sourceURL: String?
+    var sourceName: String?
     @Relationship(deleteRule: .cascade, inverse: \Ingredient.recipe) var ingredients: [Ingredient] = []
     @Relationship(deleteRule: .cascade, inverse: \RecipeStep.recipe) var steps: [RecipeStep] = []
 
