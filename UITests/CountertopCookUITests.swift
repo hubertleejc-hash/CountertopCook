@@ -283,6 +283,14 @@ final class CountertopCookUITests: XCTestCase {
             XCTAssertTrue(element(id).exists && window.contains(frame), "\(id) cut off in \(name): \(frame) in \(window)")
         }
         XCTAssertTrue(element("converterInput").isHittable, "Converter input not on screen in \(name)")
+        // All three kinds of conversion are on screen and tappable, with their pair labels.
+        for (id, label) in [("converterPair_Volume", "cups → ml"), ("converterPair_Weight", "oz → g"),
+                            ("converterPair_Temp", "°F → °C")] {
+            let chip = element(id)
+            XCTAssertTrue(chip.exists && chip.isHittable && window.contains(chip.frame),
+                          "\(id) not on screen in \(name): \(chip.frame)")
+            XCTAssertEqual(chip.label, label, "\(id) chip text in \(name)")
+        }
         let nav = element("backStep").frame
         for id in ["ingredient_0", "ingredient_1"] {
             let row = element(id)

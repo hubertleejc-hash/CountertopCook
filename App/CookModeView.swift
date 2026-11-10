@@ -69,8 +69,6 @@ struct CookModeView: View {
             return AnyView(
                 FoldSplitView(
                     primary: GeometryReader { pane in
-                        // The margin goes inside each half's "card" frame, so tests measure both
-                        // halves the same way (each one's whole pane).
                         recipePane(compact: pane.size.height < 500 || pane.size.width < 320, tight: true,
                                    margin: margin)
                     }
@@ -170,7 +168,7 @@ struct CookModeView: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: roomy ? 22 : 14) {
+                VStack(alignment: .leading, spacing: roomy ? 22 : (tight ? 10 : 14)) {
                     Text(step?.text ?? "This recipe has no steps yet.")
                         .font(Theme.step(compact: compact))
                         .foregroundStyle(Theme.ink)
@@ -191,14 +189,17 @@ struct CookModeView: View {
                         .accessibilityIdentifier("startStepTimer")
                     }
 
-                    ingredientChecklist
+                    ingredientChecklist(tight: tight)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, tight ? 0 : 4)
             }
 
             navigationButtons(compact: compact || tight)
         }
-        .padding(roomy ? 20 : 12)
+        // Tight trims only top and bottom: the sides keep the timers half's padding, so both
+        // halves' content is the same width.
+        .padding(.horizontal, compact ? 12 : 20)
+        .padding(.vertical, roomy ? 20 : 12)
         .padding(margin)
         .overlay {
             if finished {
@@ -266,11 +267,13 @@ struct CookModeView: View {
         .background(Theme.beige, in: Capsule())
     }
 
-    private var ingredientChecklist: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    /// `tight`: a little less space between rows (same text size), so the heading and the first
+    /// rows fit under a long step on the unfolded Duo.
+    private func ingredientChecklist(tight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: tight ? 4 : 6) {
             SectionLabel(text: servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)",
                          color: Theme.muted)
-                .padding(.top, 4)
+                .padding(.top, tight ? 0 : 4)
             ForEach(Array(recipe.sortedIngredients.enumerated()), id: \.element.id) { index, item in
                 let done = checked.contains(item.persistentModelID)
                 Button {
@@ -288,7 +291,7 @@ struct CookModeView: View {
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: tight ? 40 : 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

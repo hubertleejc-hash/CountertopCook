@@ -11,7 +11,7 @@ struct TimersPane: View {
     var roomy = false
     /// Keep CONVERT fully on screen below the scrolling timers (unfolded Duo's short half).
     var pinConverter = false
-    /// Outer margin, inside the "timersCard" frame (see CookModeView's fold split).
+    /// Outer margin around the pane (CookModeView's fold split).
     var margin: CGFloat = 0
     @Environment(TimerStore.self) private var store
     @State private var name = ""
@@ -278,54 +278,76 @@ struct TimerCard: View {
     }
 }
 
-/// CONVERT: an always-open white card, as in reference-design.png.
+/// CONVERT: an always-open white card, as in reference-design.png. Three pair chips
+/// (cups → ml, oz → g, °F → °C) pick the kind of conversion and are always on screen; the
+/// unit menus below them pick any other unit of that kind.
 struct ConverterView: View {
     @State private var category: ConversionCategory = .volume
     @State private var input = "1"
     @State private var from: CookingUnit = .cup
     @State private var to: CookingUnit = .milliliter
 
+    private static let pairs: [(ConversionCategory, CookingUnit, CookingUnit, String)] = [
+        (.volume, .cup, .milliliter, "cups → ml"), (.weight, .ounce, .gram, "oz → g"),
+        (.temperature, .fahrenheit, .celsius, "°F → °C"),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Convert", color: Theme.muted)
-            Picker("Type", selection: $category) {
-                ForEach(ConversionCategory.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: category) { _, newValue in
-                    switch newValue {
-                    case .volume: from = .cup; to = .milliliter
-                    case .weight: from = .ounce; to = .gram
-                    case .temperature: from = .fahrenheit; to = .celsius
+            FlowLayout(spacing: 8) {
+                ForEach(Self.pairs, id: \.0) { pair in
+                    let selected = category == pair.0
+                    Button {
+                        category = pair.0
+                        from = pair.1
+                        to = pair.2
+                    } label: {
+                        Text(pair.3)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
                     }
+                    .buttonStyle(SoftButtonStyle(fill: selected ? Theme.pill : Theme.beige,
+                                                 foreground: selected ? .white : Theme.ink))
+                    .accessibilityValue(selected ? "selected" : "")
+                    .accessibilityIdentifier("converterPair_\(pair.0.rawValue)")
                 }
+            }
 
             HStack(spacing: 6) {
-                TextField("1 1/2", text: $input)
+                TextField("1", text: $input)
                     .keyboardType(.numbersAndPunctuation)
                     .font(.title3)
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: 110, minHeight: 44)
+                    .padding(.horizontal, 10)
+                    .frame(width: 64, height: 40)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.beige, lineWidth: 2))
                     .accessibilityIdentifier("converterInput")
                 unitPicker("From", selection: $from)
+                    .accessibilityIdentifier("converterFrom")
                 Button {
                     swap(&from, &to)
                 } label: {
-                    Image(systemName: "arrow.left.arrow.right").frame(width: 36, height: 36)
+                    Image(systemName: "arrow.left.arrow.right").font(.subheadline.bold()).frame(width: 32, height: 32)
                 }
                 .buttonStyle(SoftButtonStyle(circle: true))
                 .accessibilityLabel("Swap units")
                 unitPicker("To", selection: $to)
+                    .accessibilityIdentifier("converterTo")
+                Spacer(minLength: 0)
             }
 
             Text(result)
-                .font(Theme.timer(28))
+                .font(Theme.timer(26))
                 .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .accessibilityIdentifier("converterResult")
         }
         .tint(Theme.ink)
-        .padding(16)
+        .padding(14)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
@@ -340,5 +362,6 @@ struct ConverterView: View {
         }
         .pickerStyle(.menu)
         .labelsHidden()
+        .fixedSize()
     }
 }
