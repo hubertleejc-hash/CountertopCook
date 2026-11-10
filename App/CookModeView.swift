@@ -69,8 +69,10 @@ struct CookModeView: View {
             return AnyView(
                 FoldSplitView(
                     primary: GeometryReader { pane in
-                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320, tight: true)
-                            .padding(margin)
+                        // The margin goes inside each half's "card" frame, so tests measure both
+                        // halves the same way (each one's whole pane).
+                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320, tight: true,
+                                   margin: margin)
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light),
@@ -80,8 +82,8 @@ struct CookModeView: View {
                         TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
                                    dense: true,
                                    roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
-                                   pinConverter: true)
-                            .padding(margin)
+                                   pinConverter: true,
+                                   margin: margin)
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light)
@@ -148,7 +150,7 @@ struct CookModeView: View {
 
     /// `tight`: the unfolded Duo's short half. Same fonts, but less spacing, the step count
     /// beside its bar and shorter Back / Next, so the ingredients show under a long step.
-    private func recipePane(compact: Bool, tight: Bool = false) -> some View {
+    private func recipePane(compact: Bool, tight: Bool = false, margin: CGFloat = 0) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
         let roomy = !compact && !tight
         return VStack(alignment: .leading, spacing: roomy ? 14 : 8) {
@@ -197,6 +199,7 @@ struct CookModeView: View {
             navigationButtons(compact: compact || tight)
         }
         .padding(roomy ? 20 : 12)
+        .padding(margin)
         .overlay {
             if finished {
                 finishedOverlay

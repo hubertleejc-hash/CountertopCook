@@ -11,6 +11,8 @@ struct TimersPane: View {
     var roomy = false
     /// Keep CONVERT fully on screen below the scrolling timers (unfolded Duo's short half).
     var pinConverter = false
+    /// Outer margin, inside the "timersCard" frame (see CookModeView's fold split).
+    var margin: CGFloat = 0
     @Environment(TimerStore.self) private var store
     @State private var name = ""
     @State private var minutes = 5
@@ -67,6 +69,7 @@ struct TimersPane: View {
             }
         }
         .padding(compact ? 12 : 20)
+        .padding(margin)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timersCard")
     }
