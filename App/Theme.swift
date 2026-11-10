@@ -7,6 +7,10 @@ enum Theme {
     /// The one page colour behind everything, across both halves and the hinge.
     static let backgroundUI = UIColor(hex: 0xFDF6E9)
     static let background = Color(backgroundUI)
+    /// Unfolded Duo, open flat: the recipe half is paler, the timers half warmer, sampled from
+    /// reference-design.png (Display P3 converted to sRGB). They meet at the hinge's centre line.
+    static let recipeSideUI = UIColor(hex: 0xFAF8F3)
+    static let timersSideUI = UIColor(hex: 0xF4EFE4)
     static let card = Color(hex: 0xFFFFFF)
     static let beige = Color(hex: 0xEFE7D6)
     /// Main text: dark brown.

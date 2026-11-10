@@ -93,6 +93,8 @@ final class FoldSplitController: UIViewController {
     private let primaryHost: UIHostingController<AnyView>
     private let secondaryHost: UIHostingController<AnyView>
     private let hingeView = HingeGapView()
+    /// The recipe half's paler tone, laid over the warm root up to the hinge's centre line.
+    private let recipeSide = UIView()
 
     init(primary: AnyView, secondary: AnyView) {
         primaryHost = UIHostingController(rootView: primary)
@@ -115,16 +117,20 @@ final class FoldSplitController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // One cream page under both panes and the hinge: no pane colours, no divider.
+        // Two tones under the panes, as in reference-design.png: pale recipe half, warm timers
+        // half, meeting at the hinge's centre line. Panes and hinge are clear; no divider.
         overrideUserInterfaceStyle = .light
-        view.backgroundColor = Theme.backgroundUI
+        view.backgroundColor = Theme.timersSideUI
+        recipeSide.backgroundColor = Theme.recipeSideUI
+        recipeSide.isUserInteractionEnabled = false
+        view.addSubview(recipeSide)
         for host in [primaryHost, secondaryHost] {
-            host.view.backgroundColor = Theme.backgroundUI
+            host.view.backgroundColor = .clear
         }
         addChild(arrangement)
         arrangement.view.frame = view.bounds
         arrangement.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        arrangement.view.backgroundColor = Theme.backgroundUI
+        arrangement.view.backgroundColor = .clear
         view.addSubview(arrangement.view)
         arrangement.didMove(toParent: self)
         arrangement.setViewController(primaryHost, for: .primary)
@@ -145,6 +151,7 @@ final class FoldSplitController: UIViewController {
         let regions = view.reservedRegions(kind: .division, options: .includeInactive)
         let region = regions.first(where: \.isActive) ?? regions.first
         guard let region, !region.frame.isNull, region.frame.width > 0 || region.frame.height > 0 else {
+            recipeSide.frame = primaryHost.view.convert(primaryHost.view.bounds, to: view)
             hingeView.isHidden = true
             setInsets(.zero, on: primaryHost)
             setInsets(.zero, on: secondaryHost)
@@ -159,6 +166,13 @@ final class FoldSplitController: UIViewController {
             : region.frame.insetBy(dx: 0, dy: min(0, (region.frame.height - minimum) / 2))
         hingeView.isHidden = false
         hingeView.frame = hinge
+        // Pale tone on the recipe's side of the hinge's centre line; the root is the warm tone.
+        let recipe = primaryHost.view.convert(primaryHost.view.bounds, to: view)
+        let (first, second) = vertical
+            ? view.bounds.divided(atDistance: hinge.midX - view.bounds.minX, from: .minXEdge)
+            : view.bounds.divided(atDistance: hinge.midY - view.bounds.minY, from: .minYEdge)
+        let recipeFirst = vertical ? recipe.midX < hinge.midX : recipe.midY < hinge.midY
+        recipeSide.frame = recipeFirst ? first : second
         hingeView.vertical = vertical
         let primaryState = arrangement.state(for: .primary)
         let secondaryState = arrangement.state(for: .secondary)
