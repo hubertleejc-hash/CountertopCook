@@ -416,6 +416,13 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertFalse(recipe.isEmpty || timers.isEmpty, "Cards not found in \(name)")
         let sizes = sideBySide ? (recipe.width, timers.width) : (recipe.height, timers.height)
         print("CARDS: \(name) recipe=\(recipe) timers=\(timers)")
+        if abs(sizes.0 - sizes.1) > 2 {
+            // Which parts of the recipe half reach past the timers half's size?
+            let parts = element("recipeCard").descendants(matching: .any).allElementsBoundByIndex.prefix(60)
+            for part in parts where part.exists {
+                print("CARDS: part \(part.elementType.rawValue) id=\(part.identifier) label=\(part.label.prefix(30)) frame=\(part.frame)")
+            }
+        }
         XCTAssertEqual(sizes.0, sizes.1, accuracy: 2,
                        "Recipe and timers cards differ in size in \(name): \(recipe) vs \(timers)")
     }
