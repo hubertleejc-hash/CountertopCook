@@ -101,6 +101,9 @@ jobs:
           xcodegen generate
 
       - name: Build app and run UI tests on iPhone and iPad
+        env:
+          # A slow runner can make a tap land mid-animation; rerun a failed test once.
+          UI_TEST_RETRIES: 1
         run: ci/run-ui-tests.sh
 
       - name: Publish screenshots and summaries to ci-results branch

@@ -323,11 +323,12 @@ final class CountertopCookUITests: XCTestCase {
     /// ci/duo-hinge.sh. Elsewhere FOLD_POSE is empty and the device is rotated instead.
     func testLayoutKeepsTimersVisibleAndCentreLineClear() {
         openCookMode("Pan-Seared Steak")
-        // Long timers on purpose: a timer finishing mid-test shows the "Timer done" alert,
-        // which covers every button and makes the visibility checks fail.
+        // Long timers on purpose (15 and 30 minutes): a timer finishing mid-test shows the "Timer
+        // done" alert, which covers every button and makes the visibility checks fail. On a
+        // slow CI runner this test has taken more than five minutes.
         showTimers()
-        element("preset_5").tap()
-        element("preset_10").tap()
+        element("preset_15").tap()
+        element("preset_30").tap()
         showStep()
 
         switch foldPose {
@@ -343,14 +344,14 @@ final class CountertopCookUITests: XCTestCase {
                 XCTAssertEqual(element("cookPose").label, "closed")
                 // One focus at a time: the timers, then the converter, each with the chip pinned.
                 showTimers()
-                for id in ["timersHeader", "preset_5", "timerPause_5 min", "timerChipBar"] {
+                for id in ["timersHeader", "preset_5", "timerPause_15 min", "timerChipBar"] {
                     XCTAssertTrue(element(id).waitForExistence(timeout: 3), "\(id) missing with the timers in focus")
                 }
                 snapshot("closed-timers")
                 element("focus_convert").tap()
                 XCTAssertTrue(element("converterInput").waitForExistence(timeout: 3) && element("converterInput").isHittable,
                               "Converter not on screen with Convert in focus")
-                XCTAssertTrue(element("timerCountdown_5 min").isHittable, "Timer chip not pinned with Convert in focus")
+                XCTAssertTrue(element("timerCountdown_15 min").isHittable, "Timer chip not pinned with Convert in focus")
                 snapshot("closed-convert")
             }
             print("FOLD: closed Duo checked in portrait; unfolded layout is checked in the open and partial runs")
@@ -416,7 +417,7 @@ final class CountertopCookUITests: XCTestCase {
         if reachedPose {
             sleep(1)
             snapshot(name)
-            for id in ["stepText", "stepProgressLabel", "backStep", "timersHeader", "timerCountdown_5 min"] {
+            for id in ["stepText", "stepProgressLabel", "backStep", "timersHeader", "timerCountdown_15 min"] {
                 XCTAssertTrue(element(id).exists, "\(id) missing in \(name)")
             }
             // First look at this pose on a simulator: record where things landed.
@@ -476,7 +477,7 @@ final class CountertopCookUITests: XCTestCase {
         let vertical = hinge.height >= hinge.width
         let next = element("nextStep").exists ? "nextStep" : "finishCooking"
         let recipeIDs = ["exitCook", "stepProgressLabel", "stepText", "servingsPlus", "backStep", next]
-        let timerIDs = ["timersHeader", "preset_5", "timerCountdown_5 min", "timerCountdown_10 min"]
+        let timerIDs = ["timersHeader", "preset_5", "timerCountdown_15 min", "timerCountdown_30 min"]
         // Recipe on the leading (or top) side of the hinge, timers on the other side.
         for id in recipeIDs {
             let frame = element(id).frame
@@ -554,7 +555,12 @@ final class CountertopCookUITests: XCTestCase {
     private func type(_ text: String, into id: String) {
         let field = element(id)
         XCTAssertTrue(field.waitForExistence(timeout: 5), "Missing field \(id)")
-        field.tap()
+        // A tap while a sheet is still sliding up can miss, leaving no keyboard focus: wait for
+        // the keyboard, and tap again if it didn't come.
+        for _ in 0..<3 {
+            field.tap()
+            if app.keyboards.firstMatch.waitForExistence(timeout: 3) { break }
+        }
         field.typeText(text)
     }
 
@@ -711,7 +717,7 @@ final class CountertopCookUITests: XCTestCase {
         // the pinned chip; everywhere else the whole timers pane is on screen too.
         let timerIDs = isFocusLayout ? ["timerChipBar", "focus_timers", "focus_convert"] : ["timersHeader", "preset_5"]
         let mustBeVisible = ["exitCook", "stepProgressLabel", "stepText", "servingsPlus", "backStep", next]
-            + timerIDs + ["timerCountdown_5 min", "timerCountdown_10 min"]
+            + timerIDs + ["timerCountdown_15 min", "timerCountdown_30 min"]
         for id in mustBeVisible {
             let item = element(id)
             XCTAssertTrue(item.waitForExistence(timeout: 3), "\(id) missing in \(name)")
