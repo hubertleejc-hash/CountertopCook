@@ -99,9 +99,15 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertFalse(element("reviewMissing").exists, "Review says something is missing: \(element("reviewMissing").label)")
         XCTAssertFalse(text(containing: "MUST NOT BE IMPORTED").exists, "Story or description text was imported")
         XCTAssertFalse(element("recipeRow_Weeknight Lemon Rice").exists, "Saved before the review was confirmed")
-        // The review sheet scrolls: the third ingredient row comes fully into view.
-        let third = scrollTo("ingredientName_2")
-        XCTAssertTrue(app.windows.firstMatch.frame.contains(third.frame), "Third ingredient row cut off: \(third.frame)")
+        // The review sheet scrolls: the third ingredient row comes fully into view. Swipe the
+        // form itself (on iPad it is a sheet in the middle of the screen).
+        let third = element("ingredientName_2")
+        let form = app.collectionViews.containing(.any, identifier: "recipeTitle").firstMatch
+        let window = app.windows.firstMatch.frame
+        for _ in 0..<8 where !(third.exists && third.isHittable && third.frame.maxY <= window.maxY - 60) {
+            (form.exists ? form : app).swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(third.isHittable && window.contains(third.frame), "Third ingredient row cut off: \(third.frame)")
         XCTAssertEqual(third.value as? String, "lemon, zested and juiced")
         snapshot("import-review")
         saveForm()
