@@ -1,0 +1,84 @@
+name: Build IPA
+
+# Builds an UNSIGNED Release .ipa of the app (display name "Hearth") for real devices.
+# No secrets, certificates, Apple ID or paid developer account are used, so the .ipa is not
+# signed: it has to be signed (for example by a sideloading tool with a free Apple ID) before
+# an iPhone will install it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27.1
+        run: |
+          XCODE=/Applications/Xcode_27.1.app
+          if [ ! -d "$XCODE" ]; then
+            echo "::error::$XCODE not found on this runner. Installed:"; ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -version | grep -q "^Xcode 27\.1" || { echo "::error::Expected Xcode 27.1, got: $(xcodebuild -version | head -1)"; exit 1; }
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build Release for a generic iOS device (code signing off)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CountertopCook.xcodeproj \
+            -scheme CountertopCook \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee build-ipa.log | grep -E "error:|warning: .*CountertopCook|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build-ipa.log || { echo "::error::Release device build failed"; grep -E "error:" build-ipa.log | sort -u; exit 1; }
+
+      - name: Package unsigned CountertopCook.ipa
+        run: |
+          APP=build/DerivedData/Build/Products/Release-iphoneos/CountertopCook.app
+          if [ ! -d "$APP" ]; then
+            echo "::error::$APP was not built"; ls -R build/DerivedData/Build/Products | head -50
+            exit 1
+          fi
+          # A device build, not a simulator one.
+          PLATFORM=$(/usr/libexec/PlistBuddy -c "Print :DTPlatformName" "$APP/Info.plist")
+          NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP/Info.plist")
+          echo "Platform: $PLATFORM, display name: $NAME"
+          [ "$PLATFORM" = "iphoneos" ] || { echo "::error::Expected an iphoneos build, got $PLATFORM"; exit 1; }
+          [ "$NAME" = "Hearth" ] || echo "::warning::Display name is '$NAME', expected 'Hearth'"
+          lipo -info "$APP/CountertopCook"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../CountertopCook.ipa Payload)
+          ls -lh CountertopCook.ipa
+          unzip -l CountertopCook.ipa | head -15
+
+      - name: Upload CountertopCook.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: CountertopCook-ipa
+          path: CountertopCook.ipa
+          if-no-files-found: error
+          retention-days: 30
