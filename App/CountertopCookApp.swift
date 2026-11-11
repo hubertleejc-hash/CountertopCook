@@ -20,16 +20,21 @@ struct CountertopCookApp: App {
         SeedData.seedIfNeeded(container.mainContext, force: isUITesting)
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Lato in the navigation bars too (Lora is kept for recipe titles).
+        let ink = UIColor(hex: 0x221C15)
         if let large = UIFont(name: "Lato-Bold", size: 34), let small = UIFont(name: "Lato-Bold", size: 17) {
-            UINavigationBar.appearance().largeTitleTextAttributes = [.font: large]
-            UINavigationBar.appearance().titleTextAttributes = [.font: small]
+            UINavigationBar.appearance().largeTitleTextAttributes = [.font: large, .foregroundColor: ink]
+            UINavigationBar.appearance().titleTextAttributes = [.font: small, .foregroundColor: ink]
         }
+        // Bar buttons, back chevrons, switches and pickers in UIKit-drawn controls: burnt orange.
+        UIView.appearance().tintColor = UIColor(hex: 0xD96A2B)
     }
 
     var body: some Scene {
         WindowGroup {
             RecipeListView()
                 .environment(timers)
+                // Burnt orange instead of system blue for every button, toggle and link.
+                .tint(Theme.accent)
         }
         .modelContainer(container)
     }

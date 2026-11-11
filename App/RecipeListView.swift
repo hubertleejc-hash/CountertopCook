@@ -111,6 +111,7 @@ struct RecipeListView: View {
                         .accessibilityIdentifier("libraryCount")
                 }
             }
+            .warmList()
             .navigationTitle("Recipes")
             .navigationDestination(for: Recipe.self) { RecipeDetailView(recipe: $0) }
             .navigationDestination(isPresented: $showingToBuy) { ShoppingListView() }
@@ -186,6 +187,7 @@ struct RecipeListView: View {
                 sheet = .paste("")
             } label: {
                 Label("Paste recipe text", systemImage: "doc.on.clipboard")
+                    .foregroundStyle(Theme.navy)
             }
             .accessibilityIdentifier("pasteTextButton")
             if let importError {
@@ -378,6 +380,7 @@ struct PasteTextView: View {
                         .accessibilityIdentifier("pasteTextRead")
                     }
                 }
+                .warmList()
                 .navigationTitle("Paste Text")
                 .navigationBarTitleDisplayMode(.inline)
                 .font(Theme.body())
@@ -446,6 +449,7 @@ struct RecipeDetailView: View {
                     pickingToBuy = true
                 } label: {
                     Label("Add to the to-buy list", systemImage: "cart.badge.plus")
+                        .foregroundStyle(Theme.navy)
                 }
                 .disabled(recipe.ingredients.isEmpty)
                 .accessibilityIdentifier("addToBuy")
@@ -454,6 +458,7 @@ struct RecipeDetailView: View {
                 Section {
                     Link(destination: url) {
                         Label("Source: \(recipe.sourceName ?? url.host ?? source)", systemImage: "link")
+                            .foregroundStyle(Theme.navy)
                     }
                     .accessibilityIdentifier("recipeSource")
                 }
@@ -490,6 +495,7 @@ struct RecipeDetailView: View {
             }
         }
         .font(Theme.body())
+        .warmList()
         .navigationTitle(recipe.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

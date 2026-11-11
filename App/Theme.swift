@@ -23,6 +23,8 @@ enum Theme {
     static let label = Color(hex: 0xB45309)
     /// Timer preset pills.
     static let pill = Color(hex: 0x1C1917)
+    /// Secondary actions and links: bistro navy. (Primary buttons are `accent`, burnt orange.)
+    static let navy = Color(hex: 0x1F3A5F)
 
     static let cardRadius: CGFloat = 24
 
@@ -68,6 +70,21 @@ struct SectionLabel: View {
             .font(font)
             .foregroundStyle(color)
     }
+}
+
+/// The app's look outside Cook Mode: warm cream behind lists and forms, white rows, burnt
+/// orange for primary buttons and the accent colour, bistro navy for links. No system blue.
+struct WarmListStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(Theme.background.ignoresSafeArea())
+            .tint(Theme.accent)
+    }
+}
+
+extension View {
+    func warmList() -> some View { modifier(WarmListStyle()) }
 }
 
 /// A filled button in a capsule or circle. Disabled, it fades to beige with muted text.

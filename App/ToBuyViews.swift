@@ -63,6 +63,7 @@ struct ToBuyPickerView: View {
                 }
             }
             .font(Theme.body())
+            .warmList()
             .navigationTitle("To Buy")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -112,6 +113,7 @@ struct ShoppingListView: View {
             }
         }
         .font(Theme.body())
+        .warmList()
         .navigationTitle("To Buy")
         .toolbar {
             if !items.isEmpty {

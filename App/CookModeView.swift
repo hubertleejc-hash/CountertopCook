@@ -68,8 +68,16 @@ struct CookModeView: View {
     static let densePaneHeight: CGFloat = 420
     /// From this timers-pane height up there's room for the line under "Always on this side".
     static let roomyPaneHeight: CGFloat = 760
-    /// Extra room each page keeps beside the hinge in the book pose.
-    static let bookGutter: CGFloat = 12
+    /// Book pose: extra room each page keeps beside the hinge, and on its outer edge, so the two
+    /// pages are narrower than open flat and sit like a book's, with margins round the text.
+    /// The narrower book page sets its step at 34 pt (open flat: 38 pt), so a step still fits
+    /// in four lines and the first ingredients stay above Back / Next.
+    static let bookGutter: CGFloat = 20
+    static let bookOuterMargin: CGFloat = 8
+    static let bookStepSize: CGFloat = 34
+    /// Below this height a recipe pane drops the COOK MODE label and puts the title in the top
+    /// row, so the step keeps room to be read (open flat portrait on a short screen).
+    static let shortPaneHeight: CGFloat = 430
 
     /// UI tests and previews can ask for one pose's layout by name (COOK_POSE=tented), for the
     /// poses a simulator can't be put into.
@@ -162,7 +170,9 @@ struct CookModeView: View {
                         if pose == .tabletop {
                             lookPane(compact: pane.size.width < 320, margin: margin)
                         } else {
-                            recipePane(compact: pane.size.width < 320, tight: true, margin: margin, gutter: gutter)
+                            recipePane(compact: pane.size.width < 320, tight: true, margin: margin, gutter: gutter,
+                                       outer: pose == .book ? Self.bookOuterMargin : 0,
+                                       short: pane.size.height < Self.shortPaneHeight)
                         }
                     }
                     .environment(timers)
@@ -178,11 +188,13 @@ struct CookModeView: View {
                                        roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
                                        pinConverter: true,
                                        margin: margin,
-                                       gutter: gutter)
+                                       gutter: gutter,
+                                       outer: pose == .book ? Self.bookOuterMargin : 0)
                         }
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light),
+                    bookFold: pose == .book,
                     onHingeAxis: { hingeVertical = $0 }
                 )
                 .ignoresSafeArea(.container)
@@ -201,15 +213,20 @@ struct CookModeView: View {
         let pale = Color(Theme.recipeSideUI), warm = Color(Theme.timersSideUI)
         return GeometryReader { geo in
             if pose == .openLandscape || pose == .book {
+                let outer = pose == .book ? Self.bookOuterMargin : 0
                 HStack(spacing: 0) {
-                    recipePane(compact: geo.size.width / 2 < 320, tight: true, margin: margin, gutter: gutter)
+                    recipePane(compact: geo.size.width / 2 < 320, tight: true, margin: margin, gutter: gutter, outer: outer)
                         .padding(.trailing, half)
                         .frame(width: geo.size.width / 2)
                         .background(pale.ignoresSafeArea())
-                    TimersPane(compact: geo.size.width / 2 < 320, dense: true, pinConverter: true, margin: margin, gutter: gutter)
+                    TimersPane(compact: geo.size.width / 2 < 320, dense: true, pinConverter: true, margin: margin,
+                               gutter: gutter, outer: outer)
                         .padding(.leading, half)
                         .frame(width: geo.size.width / 2)
                         .background(warm.ignoresSafeArea())
+                }
+                .overlay {
+                    if pose == .book { BookFold().frame(width: Self.hingeGap * 2) }
                 }
             } else {
                 // On a small screen the halves are short: use the compact text sizes there.
@@ -219,7 +236,8 @@ struct CookModeView: View {
                         if pose == .tabletop {
                             lookPane(compact: compact, margin: margin)
                         } else {
-                            recipePane(compact: compact, tight: true, margin: margin)
+                            recipePane(compact: compact, tight: true, margin: margin,
+                                       short: geo.size.height / 2 < Self.shortPaneHeight)
                         }
                     }
                     .padding(.bottom, half)
@@ -270,8 +288,18 @@ struct CookModeView: View {
             case .timers:
                 TimersPane(compact: true, showConverter: false)
             case .convert:
-                ScrollView {
-                    ConverterView().padding(16)
+                // The converter and a card of everyday conversions, centred in the space below
+                // the pinned timer chip; scrolls if the screen is short.
+                GeometryReader { geo in
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            ConverterView()
+                            CommonConversions()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .center)
+                    }
                 }
             }
         }
@@ -291,15 +319,20 @@ struct CookModeView: View {
                     .accessibilityIdentifier("stepProgress")
             }
             TimerChipBar(onTap: nil)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    stepText(step, compact: false)
-                    if let minutes = step?.timerMinutes, minutes > 0 {
-                        stepTimerButton(minutes: minutes)
-                    }
+            // The step and its timer sit in the middle of the space; a long step scrolls.
+            let block = VStack(alignment: .leading, spacing: 16) {
+                stepText(step, compact: false)
+                if let minutes = step?.timerMinutes, minutes > 0 {
+                    stepTimerButton(minutes: minutes)
                 }
-                .padding(.vertical, 4)
             }
+            .padding(.vertical, 4)
+            Spacer(minLength: 0)
+            ViewThatFits(in: .vertical) {
+                block
+                ScrollView { block }.id(stepIndex)
+            }
+            Spacer(minLength: 0)
             navigationButtons(compact: false)
         }
         .padding(.horizontal, 20)
@@ -373,6 +406,7 @@ struct CookModeView: View {
             ScrollView {
                 stepText(step, compact: compact)
             }
+            .id(stepIndex)
         }
         .padding(.horizontal, compact ? 12 : 20)
         .padding(.vertical, 12)
@@ -396,8 +430,11 @@ struct CookModeView: View {
                         }
                         ingredientChecklist(tight: true)
                     }
+                    .padding(.bottom, Self.fadeHeight + 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .id(stepIndex)
+                .bottomFade(Self.fadeHeight)
                 if geo.size.width < 520 {
                     VStack(alignment: .leading, spacing: 8) {
                         TimerChipBar(onTap: nil)
@@ -436,9 +473,9 @@ struct CookModeView: View {
     }
 
     /// The current step: large Lato with open line spacing.
-    private func stepText(_ step: RecipeStep?, compact: Bool, tight: Bool = false) -> some View {
+    private func stepText(_ step: RecipeStep?, compact: Bool, tight: Bool = false, size: CGFloat? = nil) -> some View {
         Text(step?.text ?? "This recipe has no steps yet.")
-            .font(Theme.step(compact: compact))
+            .font(size.map { Theme.text($0) } ?? Theme.step(compact: compact))
             .lineSpacing(tight ? 3 : Theme.stepLineSpacing(compact: compact))
             .foregroundStyle(Theme.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -449,11 +486,18 @@ struct CookModeView: View {
     /// `tight`: a short pane (the unfolded Duo's halves, the closed Duo). Same fonts, but less
     /// spacing, the step count beside its bar and shorter Back / Next, so the ingredients show
     /// under a long step. `gutter`: extra room beside the hinge (book pose).
-    private func recipePane(compact: Bool, tight: Bool = false, margin: CGFloat = 0, gutter: CGFloat = 0) -> some View {
+    /// `outer`: margin on the page's outer edge (book pose). `short`: a pane too short for the
+    /// full header, so the title goes in the top row and the step keeps its room.
+    private func recipePane(compact: Bool, tight: Bool = false, margin: CGFloat = 0, gutter: CGFloat = 0,
+                            outer: CGFloat = 0, short: Bool = false) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
         let roomy = !compact && !tight
         return VStack(alignment: .leading, spacing: roomy ? 14 : (tight ? 6 : 8)) {
-            header(compact: compact)
+            if short {
+                shortHeader
+            } else {
+                header(compact: compact)
+            }
             let bar = StepProgressBar(value: progressValue)
                 .accessibilityIdentifier("stepProgress")
             if tight {
@@ -465,7 +509,7 @@ struct CookModeView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: roomy ? 22 : (tight ? 10 : 14)) {
-                    stepText(step, compact: compact, tight: tight)
+                    stepText(step, compact: compact, tight: tight, size: outer > 0 ? Self.bookStepSize : nil)
 
                     if let minutes = step?.timerMinutes, minutes > 0 {
                         stepTimerButton(minutes: minutes, tight: tight)
@@ -473,8 +517,15 @@ struct CookModeView: View {
 
                     ingredientChecklist(tight: tight)
                 }
-                .padding(.vertical, tight ? 0 : 4)
+                .padding(.top, tight ? 0 : 4)
+                // Room under the last row, so it scrolls clear of the fade above Back / Next.
+                .padding(.bottom, Self.fadeHeight + 4)
             }
+            // Each step starts at its top, not where the last step was scrolled to.
+            .id(stepIndex)
+            .bottomFade(Self.fadeHeight)
+            // The step and its list get the room; the header and buttons keep their own size.
+            .layoutPriority(1)
 
             navigationButtons(compact: compact || tight)
         }
@@ -482,6 +533,8 @@ struct CookModeView: View {
         // halves' content is the same width.
         .padding(.horizontal, compact ? 12 : 20)
         .padding(.vertical, roomy ? 20 : 12)
+        .padding(.leading, outer)
+        .padding(.vertical, outer > 0 ? 6 : 0)
         .padding(.trailing, gutter)
         .padding(margin)
         .overlay {
@@ -508,6 +561,23 @@ struct CookModeView: View {
         }
         .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
         .accessibilityIdentifier("startStepTimer")
+    }
+
+    /// Height of the fade at the bottom of a scrolling list, where rows pass under Back / Next.
+    static let fadeHeight: CGFloat = 16
+
+    /// One row for a short pane: ✕, the title, servings.
+    private var shortHeader: some View {
+        HStack(spacing: 10) {
+            exitButton
+            Text(recipe.title)
+                .font(Theme.title(20))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 4)
+            servingsControl
+        }
     }
 
     /// COOK MODE with servings on the right, then the recipe title (as in reference-design.png).
@@ -726,5 +796,34 @@ private struct TrailingIconLabelStyle: LabelStyle {
             configuration.title
             configuration.icon
         }
+    }
+}
+
+extension View {
+    /// Rows that scroll under the bottom edge fade out instead of being cut by a hard line, so
+    /// a half-visible ingredient never looks hidden behind Back / Next.
+    func bottomFade(_ height: CGFloat) -> some View {
+        mask {
+            VStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: height)
+            }
+        }
+    }
+}
+
+/// The centre of an open book: a soft shade either side of the spine. Decorative only: it is
+/// drawn under the hinge's reserved region, takes no taps and is hidden from VoiceOver.
+struct BookFold: View {
+    var body: some View {
+        LinearGradient(stops: [
+            .init(color: .black.opacity(0), location: 0),
+            .init(color: .black.opacity(0.07), location: 0.5),
+            .init(color: .black.opacity(0), location: 1),
+        ], startPoint: .leading, endPoint: .trailing)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

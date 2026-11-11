@@ -99,6 +99,10 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertFalse(element("reviewMissing").exists, "Review says something is missing: \(element("reviewMissing").label)")
         XCTAssertFalse(text(containing: "MUST NOT BE IMPORTED").exists, "Story or description text was imported")
         XCTAssertFalse(element("recipeRow_Weeknight Lemon Rice").exists, "Saved before the review was confirmed")
+        // The review sheet scrolls: the third ingredient row comes fully into view.
+        let third = scrollTo("ingredientName_2")
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(third.frame), "Third ingredient row cut off: \(third.frame)")
+        XCTAssertEqual(third.value as? String, "lemon, zested and juiced")
         snapshot("import-review")
         saveForm()
 
@@ -340,6 +344,7 @@ final class CountertopCookUITests: XCTestCase {
             checkLayout("closed-step1")
             element("nextStep").tap()
             checkLayout("closed-step2")
+            checkLastIngredientReachable("closed-step2")
             if isFocusLayout {
                 XCTAssertEqual(element("cookPose").label, "closed")
                 // One focus at a time: the timers, then the converter, each with the chip pinned.
@@ -352,6 +357,13 @@ final class CountertopCookUITests: XCTestCase {
                 XCTAssertTrue(element("converterInput").waitForExistence(timeout: 3) && element("converterInput").isHittable,
                               "Converter not on screen with Convert in focus")
                 XCTAssertTrue(element("timerCountdown_15 min").isHittable, "Timer chip not pinned with Convert in focus")
+                // No dead space: the everyday conversions fill the screen under the converter.
+                let common = element("commonConversions")
+                XCTAssertTrue(common.exists, "No common conversions under the converter")
+                XCTAssertTrue(app.windows.firstMatch.frame.contains(common.frame), "Common conversions cut off: \(common.frame)")
+                XCTAssertGreaterThan(common.frame.height, 200, "Common conversions card is too small: \(common.frame)")
+                let oven = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '350 °F'")).firstMatch
+                XCTAssertTrue(oven.exists, "Oven temperatures missing from common conversions")
                 snapshot("closed-convert")
             }
             print("FOLD: closed Duo checked in portrait; unfolded layout is checked in the open and partial runs")
@@ -369,6 +381,7 @@ final class CountertopCookUITests: XCTestCase {
             checkLayout("landscape-step2")
             element("nextStep").tap()
             checkLayout("landscape-step3")
+            checkLastIngredientReachable("landscape-step3")
         }
     }
 
@@ -394,9 +407,43 @@ final class CountertopCookUITests: XCTestCase {
             XCTAssertEqual(element("cookPose").label, expected, "Wrong layout for the \(pose) hinge")
         }
         checkFoldLayout("unfolded-\(pose)-step1", hinge: hinge.frame)
+        if pose == "partial" && vertical { checkBookPose(hinge: hinge) }
         element("nextStep").tap()
         checkFoldLayout("unfolded-\(pose)-step2", hinge: hinge.frame)
         photographTurnedPose(pose)
+    }
+
+    /// Book (half open, hinge top to bottom) must not look like open flat: the fold is shaded,
+    /// and each page keeps a wider margin beside the spine (open flat keeps 28 pt).
+    private func checkBookPose(hinge: XCUIElement) {
+        let value = hinge.value as? String ?? ""
+        XCTAssertTrue(value.contains("fold=book"), "No book fold drawn on the hinge: \(value)")
+        let recipe = element("recipeCard").frame, timers = element("timersCard").frame
+        let leftMargin = hinge.frame.minX - recipe.maxX, rightMargin = timers.minX - hinge.frame.maxX
+        print("POSE: book margins beside the spine \(leftMargin) and \(rightMargin); pages \(recipe.width) and \(timers.width)")
+        XCTAssertGreaterThanOrEqual(leftMargin, 44, "The left page runs up to the spine as in open flat: \(recipe) vs \(hinge.frame)")
+        XCTAssertGreaterThanOrEqual(rightMargin, 44, "The right page runs up to the spine as in open flat: \(timers) vs \(hinge.frame)")
+        XCTAssertLessThan(recipe.width, 300, "Book pages should be narrower than open flat's 315 pt: \(recipe.width)")
+        snapshot("pose-book")
+    }
+
+    /// Scrolls the step's list to the end: the last ingredient must come fully into view, clear
+    /// of the fade above Back / Next.
+    private func checkLastIngredientReachable(_ name: String) {
+        let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'ingredient_'"))
+        let count = rows.count
+        XCTAssertGreaterThan(count, 0, "No ingredients in \(name)")
+        guard count > 0 else { return }
+        let last = element("ingredient_\(count - 1)")
+        let card = element("recipeCard")
+        func clear() -> Bool { last.isHittable && last.frame.maxY <= element("backStep").frame.minY - 12 }
+        for _ in 0..<10 where !clear() {
+            let from = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+            from.press(forDuration: 0.05, thenDragTo: card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
+        }
+        print("POSE: \(name) last ingredient \(last.frame) back=\(element("backStep").frame)")
+        XCTAssertTrue(clear(), "The last ingredient stays under Back / Next in \(name): \(last.frame) vs \(element("backStep").frame)")
+        snapshot("\(name)-ingredients-end")
     }
 
     /// Turns the unfolded Duo a quarter turn, so the hinge runs across: open flat that is "open
@@ -425,6 +472,59 @@ final class CountertopCookUITests: XCTestCase {
             print("POSE: \(name) hinge=\(hinge) step=\(element("stepText").frame) back=\(element("backStep").frame) timers=\(element("timersHeader").frame)")
         }
         XCUIDevice.shared.orientation = .portrait
+    }
+
+    // MARK: Open flat portrait: a long step is readable in full
+
+    /// The recipe half is short in open flat portrait. A long step must start right under the
+    /// progress bar, scroll to its end above Back / Next, and leave the timers below it.
+    func testOpenPortraitShowsWholeLongStep() {
+        guard foldPose == nil || foldPose == "closed" else { return }
+        let longStep = "Whisk the eggs with the milk, a pinch of salt and the vanilla, then pour the mixture into the warm pan, tilt it so the batter covers the base evenly, and cook gently until the edges set and the middle is just firm."
+        app.terminate()
+        app.launchEnvironment["COOK_POSE"] = "openPortrait"
+        app.launch()
+        scrollLibraryToTop()
+        element("pasteTextButton").tap()
+        let editor = element("pasteTextEditor")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5), "Paste screen didn't open")
+        editor.tap()
+        editor.typeText("Long Step Test\nIngredients\n2 eggs\n1 cup milk\nMethod\n\(longStep)\nServe.")
+        hideKeyboard()
+        scrollTo("pasteTextRead").tap()
+        XCTAssertTrue(element("reviewNotice").waitForExistence(timeout: 5))
+        saveForm()
+        let start = element("startCooking")
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let step = element("stepText")
+        XCTAssertTrue(step.waitForExistence(timeout: 5))
+        waitForCookModeToSettle()
+        XCTAssertEqual(element("cookPose").label, "openPortrait")
+        XCTAssertEqual(step.label, longStep)
+        // The step starts right under the progress bar, not scrolled or squeezed away.
+        let progress = element("stepProgressLabel").frame, nav = element("backStep").frame
+        XCTAssertGreaterThanOrEqual(step.frame.minY, progress.maxY - 1, "The step starts above the progress bar: \(step.frame)")
+        XCTAssertLessThanOrEqual(step.frame.minY, progress.maxY + 40, "The step doesn't start under the progress bar: \(step.frame)")
+        XCTAssertGreaterThan(nav.minY - step.frame.minY, 100, "Too little room for the step: \(step.frame) vs Back \(nav)")
+        XCTAssertTrue(step.isHittable, "The step is not on screen")
+        // The timers sit below the recipe half.
+        XCTAssertGreaterThanOrEqual(element("timersHeader").frame.minY, nav.maxY - 1, "Timers are not below the recipe")
+        snapshot("open-portrait-long-step")
+        // Scrolled, the end of the step comes above Back / Next.
+        let card = element("recipeCard")
+        for _ in 0..<6 where step.frame.maxY > nav.minY - 4 {
+            card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+                .press(forDuration: 0.05, thenDragTo: card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
+        }
+        XCTAssertLessThanOrEqual(step.frame.maxY, nav.minY - 4, "The end of the step can't be scrolled into view: \(step.frame) vs \(nav)")
+        snapshot("open-portrait-long-step-end")
+        // The next step starts at its top again.
+        element("nextStep").tap()
+        XCTAssertEqual(element("stepText").label, "Serve.")
+        XCTAssertGreaterThanOrEqual(element("stepText").frame.minY, element("stepProgressLabel").frame.maxY - 1)
+        app.terminate()
+        app.launchEnvironment["COOK_POSE"] = nil
     }
 
     // MARK: Six poses: each has its own layout

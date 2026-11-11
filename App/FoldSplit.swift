@@ -80,16 +80,20 @@ struct FoldSplitView<Primary: View, Secondary: View>: UIViewControllerRepresenta
     /// Called when the hinge's direction is known or changes: true when it runs top to bottom
     /// (panes side by side), false when it runs across (panes stacked, as on a tabletop), nil
     /// when this screen has no hinge region at all (the outer screen).
+    /// Book pose: a soft shade either side of the spine (decorative, on the hinge region).
+    var bookFold = false
     var onHingeAxis: ((Bool?) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> FoldSplitController {
         let controller = FoldSplitController(primary: AnyView(primary), secondary: AnyView(secondary))
         controller.onHingeAxis = onHingeAxis
+        controller.setBookFold(bookFold)
         return controller
     }
 
     func updateUIViewController(_ controller: FoldSplitController, context: Context) {
         controller.onHingeAxis = onHingeAxis
+        controller.setBookFold(bookFold)
         controller.update(primary: AnyView(primary), secondary: AnyView(secondary))
     }
 }
@@ -195,6 +199,7 @@ final class FoldSplitController: UIViewController {
             "primaryHidden=\(primaryState?.isHidden ?? true)",
             "secondaryHidden=\(secondaryState?.isHidden ?? true)",
             "splitAxis=\(secondaryState.map { $0.splitAxis == .vertical ? "vertical" : "horizontal" } ?? "none")",
+            "fold=\(hingeView.bookFold ? "book" : "none")",
         ].joined(separator: " ")
         view.bringSubviewToFront(hingeView)
         let hosts = [primaryHost, secondaryHost]
@@ -219,6 +224,12 @@ final class FoldSplitController: UIViewController {
         for (host, insets) in zip(hosts, extra) {
             setInsets(insets, on: host)
         }
+    }
+
+    func setBookFold(_ on: Bool) {
+        guard hingeView.bookFold != on else { return }
+        hingeView.bookFold = on
+        view.setNeedsLayout()
     }
 
     /// Tells SwiftUI the hinge's direction, once per change and outside the layout pass.
@@ -284,7 +295,11 @@ private final class RegionTrackingView: UIView {
 /// nothing tappable sits here. UI tests find it as "hingeGap" and read the region from its value.
 @available(iOS 27.1, *)
 private final class HingeGapView: UIView {
-    var vertical = true
+    var vertical = true { didSet { setNeedsLayout() } }
+    /// Book pose: a soft shade either side of the spine, darkest at the hinge's centre line.
+    /// Only a colour gradient: nothing on it can be tapped (the view takes no touches).
+    var bookFold = false { didSet { fold.isHidden = !bookFold } }
+    private let fold = CAGradientLayer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -293,9 +308,21 @@ private final class HingeGapView: UIView {
         isAccessibilityElement = true
         accessibilityIdentifier = "hingeGap"
         accessibilityLabel = "Hinge"
+        fold.colors = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0.07).cgColor,
+                       UIColor(white: 0, alpha: 0).cgColor]
+        fold.locations = [0, 0.5, 1]
+        fold.isHidden = true
+        layer.addSublayer(fold)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        fold.frame = bounds
+        fold.startPoint = vertical ? CGPoint(x: 0, y: 0.5) : CGPoint(x: 0.5, y: 0)
+        fold.endPoint = vertical ? CGPoint(x: 1, y: 0.5) : CGPoint(x: 0.5, y: 1)
+    }
 }
 
 #endif

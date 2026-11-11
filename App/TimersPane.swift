@@ -15,6 +15,8 @@ struct TimersPane: View {
     var margin: CGFloat = 0
     /// Extra room beside the hinge (book pose).
     var gutter: CGFloat = 0
+    /// Margin on the page's outer edge (book pose).
+    var outer: CGFloat = 0
     /// False where the converter has its own place (the closed Duo's Convert focus).
     var showConverter = true
     @Environment(TimerStore.self) private var store
@@ -75,6 +77,8 @@ struct TimersPane: View {
         }
         .padding(compact ? 12 : 20)
         .padding(.leading, gutter)
+        .padding(.trailing, outer)
+        .padding(.vertical, outer > 0 ? 6 : 0)
         .padding(margin)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timersCard")
@@ -194,6 +198,40 @@ struct TimerChipBar: View {
         .onTapGesture { onTap?() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timerChipBar")
+    }
+}
+
+/// Everyday kitchen conversions at a glance, worked out by the same converter as the card above.
+struct CommonConversions: View {
+    private static let rows: [(String, CookingUnit, CookingUnit)] = [
+        ("1", .cup, .milliliter), ("1", .tablespoon, .milliliter), ("1", .teaspoon, .milliliter),
+        ("1", .ounce, .gram), ("1", .pound, .gram),
+        ("350", .fahrenheit, .celsius), ("400", .fahrenheit, .celsius), ("425", .fahrenheit, .celsius),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Common conversions", color: Theme.muted)
+            ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
+                if let value = Converter.convert(text: row.0, from: row.1, to: row.2) {
+                    HStack {
+                        Text("\(row.0) \(row.1.rawValue)")
+                            .font(Theme.text(17))
+                            .foregroundStyle(Theme.ink)
+                        Spacer(minLength: 8)
+                        Text("\(Converter.format(value)) \(row.2.rawValue)")
+                            .font(Theme.timer(17))
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .frame(minHeight: 28)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(14)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("commonConversions")
     }
 }
 

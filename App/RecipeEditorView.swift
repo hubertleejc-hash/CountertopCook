@@ -35,6 +35,7 @@ struct RecipeEditorView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Label("Check this against the original before saving.", systemImage: "checkmark.seal")
                                 .font(Theme.body(17, bold: true))
+                                .foregroundStyle(Theme.navy)
                             Text("Nothing was guessed. Anything the source didn't give is left blank for you to fill in or leave.")
                                 .font(Theme.body(15, relativeTo: .subheadline))
                                 .foregroundStyle(.secondary)
@@ -106,7 +107,7 @@ struct RecipeEditorView: View {
                     Button {
                         draft.ingredients.append(IngredientDraft())
                     } label: {
-                        Label("Add Ingredient", systemImage: "plus.circle")
+                        Label("Add Ingredient", systemImage: "plus.circle").foregroundStyle(Theme.navy)
                     }
                     .accessibilityIdentifier("addIngredient")
                 } header: {
@@ -134,7 +135,7 @@ struct RecipeEditorView: View {
                     Button {
                         draft.steps.append(StepDraft())
                     } label: {
-                        Label("Add Step", systemImage: "plus.circle")
+                        Label("Add Step", systemImage: "plus.circle").foregroundStyle(Theme.navy)
                     }
                     .accessibilityIdentifier("addStep")
                 }
@@ -152,6 +153,7 @@ struct RecipeEditorView: View {
                     .accessibilityIdentifier("saveRecipeBottom")
                 }
             }
+            .warmList()
             .navigationTitle(reviewing ? "Review Import" : (recipe == nil ? "New Recipe" : "Edit Recipe"))
             .font(Theme.body())
             .navigationBarTitleDisplayMode(.inline)
