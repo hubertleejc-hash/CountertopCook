@@ -384,25 +384,32 @@ struct CookModeView: View {
 
     /// The bottom half on a tabletop, the touch deck: ingredients (and the step's timer) on the
     /// left, timers on the right, in two equal columns, with Back / Next across the bottom,
-    /// nearest the cook.
+    /// nearest the cook. Too narrow for two columns, it is one column under the timer chip.
     private func deckPane(margin: CGFloat) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
         return VStack(spacing: 8) {
             GeometryReader { geo in
-                let column = max(0, (geo.size.width - 16) / 2)
-                HStack(alignment: .top, spacing: 16) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if let minutes = step?.timerMinutes, minutes > 0 {
-                                stepTimerButton(minutes: minutes, tight: true)
-                            }
-                            ingredientChecklist(tight: true)
+                let touch = ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let minutes = step?.timerMinutes, minutes > 0 {
+                            stepTimerButton(minutes: minutes, tight: true)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        ingredientChecklist(tight: true)
                     }
-                    .frame(width: column)
-                    TimersPane(compact: true, dense: true, margin: 0)
-                        .frame(width: column)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if geo.size.width < 520 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TimerChipBar(onTap: nil)
+                        touch
+                    }
+                } else {
+                    let column = max(0, (geo.size.width - 16) / 2)
+                    HStack(alignment: .top, spacing: 16) {
+                        touch.frame(width: column)
+                        TimersPane(compact: true, dense: true, margin: 0)
+                            .frame(width: column)
+                    }
                 }
             }
             navigationButtons(compact: true)

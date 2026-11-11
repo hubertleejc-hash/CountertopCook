@@ -456,7 +456,9 @@ final class CountertopCookUITests: XCTestCase {
             case "tabletop":
                 // Look on top, touch below: the step above the ingredients, Back / Next and timers.
                 let step = element("stepText").frame
-                for id in ["ingredient_0", "backStep", "nextStep", "timersHeader"] {
+                // A deck wide enough has the whole timers pane; a narrow one has the timer chip.
+                let timers = element("timersHeader").exists ? "timersHeader" : "timerChipBar"
+                for id in ["ingredient_0", "backStep", "nextStep", timers] {
                     XCTAssertTrue(element(id).exists, "\(id) missing on the tabletop deck")
                     XCTAssertGreaterThanOrEqual(element(id).frame.minY, step.maxY - 1, "\(id) is not below the step on the tabletop")
                 }
