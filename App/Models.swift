@@ -1,5 +1,34 @@
 import Foundation
 import SwiftData
+import CookCore
+
+/// The three shelves of the library.
+enum RecipeCategory: String, CaseIterable, Identifiable {
+    case food = "Food", drinks = "Drinks", desserts = "Desserts"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .food: return "fork.knife"
+        case .drinks: return "cup.and.saucer"
+        case .desserts: return "birthday.cake"
+        }
+    }
+
+    /// From a category a recipe page publishes ("Dessert", "Cocktails", "Main course"). Only
+    /// drinks and desserts are recognised; everything else is Food.
+    static func from(published text: String?) -> RecipeCategory {
+        guard let text = text?.lowercased() else { return .food }
+        if ["dessert", "cake", "cookie", "sweet", "pudding", "ice cream", "pastry", "baking"].contains(where: text.contains) {
+            return .desserts
+        }
+        if ["drink", "beverage", "cocktail", "smoothie", "juice", "coffee", "tea"].contains(where: text.contains) {
+            return .drinks
+        }
+        return .food
+    }
+}
 
 @Model
 final class Recipe {
@@ -13,6 +42,9 @@ final class Recipe {
     var sourceName: String?
     /// "french" or "italian" for a recipe with that accent; nil for none.
     var cuisine: String?
+    /// A `RecipeCategory` raw value: "Food", "Drinks" or "Desserts".
+    var category: String = "Food"
+    var isFavorite: Bool = false
     @Relationship(deleteRule: .cascade, inverse: \Ingredient.recipe) var ingredients: [Ingredient] = []
     @Relationship(deleteRule: .cascade, inverse: \RecipeStep.recipe) var steps: [RecipeStep] = []
 
@@ -24,6 +56,7 @@ final class Recipe {
     }
 
     var cuisineKind: Cuisine? { Cuisine.from(tag: cuisine) }
+    var categoryKind: RecipeCategory { RecipeCategory(rawValue: category) ?? .food }
     var sortedIngredients: [Ingredient] { ingredients.sorted { $0.order < $1.order } }
     var sortedSteps: [RecipeStep] { steps.sorted { $0.order < $1.order } }
 }
@@ -60,6 +93,50 @@ final class RecipeStep {
     }
 }
 
+/// One line of the to-buy list. Amounts are free text, like ingredients, so fractions stay exact.
+@Model
+final class ShoppingItem {
+    var name: String
+    var amountText: String
+    var unit: String
+    var isBought: Bool = false
+    /// Titles of the recipes this is for, separated by " · ".
+    var recipes: String = ""
+    var createdAt: Date = Date()
+
+    init(name: String, amountText: String, unit: String, recipes: String) {
+        self.name = name
+        self.amountText = amountText
+        self.unit = unit
+        self.recipes = recipes
+    }
+
+    var line: ShoppingLine { ShoppingLine(amount: amountText, unit: unit, name: name) }
+}
+
+enum ToBuy {
+    /// Adds a recipe's needed ingredients to the list. An item already waiting on the list in
+    /// the same unit gets the amounts added together (2 tbsp butter + 3 tbsp butter = 5 tbsp).
+    static func add(_ lines: [ShoppingLine], from recipeTitle: String, context: ModelContext) {
+        var waiting = ((try? context.fetch(FetchDescriptor<ShoppingItem>())) ?? []).filter { !$0.isBought }
+        for line in ShoppingMerge.combine(lines) {
+            if let item = waiting.first(where: { ShoppingMerge.canCombine($0.line, line) }) {
+                let sum = ShoppingMerge.sum(item.line, line)
+                item.amountText = sum.amount
+                item.name = sum.name
+                var titles = item.recipes.components(separatedBy: " · ").filter { !$0.isEmpty }
+                if !titles.contains(recipeTitle) { titles.append(recipeTitle) }
+                item.recipes = titles.joined(separator: " · ")
+            } else {
+                let item = ShoppingItem(name: line.name, amountText: line.amount, unit: line.unit, recipes: recipeTitle)
+                context.insert(item)
+                waiting.append(item)
+            }
+        }
+        try? context.save()
+    }
+}
+
 // MARK: - Editing drafts
 
 struct IngredientDraft: Identifiable, Equatable {
@@ -82,13 +159,46 @@ struct RecipeDraft: Equatable {
     var totalMinutes = 30
     var ingredients: [IngredientDraft] = [IngredientDraft()]
     var steps: [StepDraft] = [StepDraft()]
+    var category = RecipeCategory.food
+    var sourceURL: String?
+    var sourceName: String?
+    var cuisine: String?
+    /// Import review only: what the source didn't say ("servings", "total time"), so the review
+    /// screen can point at the blanks instead of filling them in.
+    var notInSource: [String] = []
+    /// Import review only: the source's own text, shown when no recipe list could be read from it.
+    var referenceText: String?
 
     init() {}
+
+    /// A draft from an import, for the review screen. Only what the source gave: unknown
+    /// servings become 1 (amounts as written), unknown total time stays 0 ("not given"), and a
+    /// step gets a timer only when its own text states a time.
+    init(imported: ImportedRecipe, sourceURL: String?, sourceName: String?, referenceText: String? = nil) {
+        title = imported.title
+        servings = imported.servings ?? 1
+        totalMinutes = imported.totalMinutes ?? 0
+        if imported.servings == nil { notInSource.append("servings") }
+        if imported.totalMinutes == nil { notInSource.append("total time") }
+        ingredients = imported.ingredients.map { IngredientDraft(amount: $0.amount, unit: $0.unit, name: $0.name) }
+        steps = imported.steps.map { StepDraft(text: $0, timerMinutes: StepTime.minutes(in: $0) ?? 0) }
+        if ingredients.isEmpty { ingredients = [IngredientDraft()]; notInSource.append("ingredients") }
+        if steps.isEmpty { steps = [StepDraft()]; notInSource.append("steps") }
+        category = RecipeCategory.from(published: imported.category)
+        cuisine = Cuisine.from(tag: imported.cuisine)?.rawValue
+        self.sourceURL = sourceURL
+        self.sourceName = sourceName
+        self.referenceText = referenceText
+    }
 
     init(recipe: Recipe) {
         title = recipe.title
         servings = recipe.servings
         totalMinutes = recipe.totalMinutes
+        category = recipe.categoryKind
+        sourceURL = recipe.sourceURL
+        sourceName = recipe.sourceName
+        cuisine = recipe.cuisine
         ingredients = recipe.sortedIngredients.map {
             IngredientDraft(amount: $0.amountText, unit: $0.unit, name: $0.name)
         }
@@ -120,6 +230,10 @@ struct RecipeDraft: Equatable {
         target.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         target.servings = max(1, servings)
         target.totalMinutes = max(0, totalMinutes)
+        target.category = category.rawValue
+        target.sourceURL = sourceURL
+        target.sourceName = sourceName
+        target.cuisine = cuisine
 
         let cleanIngredients = ingredients.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
         target.ingredients = cleanIngredients.enumerated().map { index, item in

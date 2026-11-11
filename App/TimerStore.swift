@@ -100,7 +100,7 @@ final class TimerStore {
         guard remaining > 0 else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(timer.name) is done"
-        content.body = "Your Countertop Cook timer finished."
+        content.body = "Your Hearth timer finished."
         content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)
         UNUserNotificationCenter.current().add(

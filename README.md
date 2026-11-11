@@ -1,25 +1,68 @@
-# Countertop Cook
+# Hearth
 
-A small, personal iOS cooking app. Local only: no account, no server, no AI.
+A small, personal iOS cooking app (formerly Countertop Cook; the bundle ID is unchanged).
+Local only: no account, no server, no AI. All text is English.
 
-In Cook Mode the recipe and the timers are always on screen together:
-- **Wide (unfolded / landscape / iPad):** recipe on the left, timers on the right, split 50/50.
-- **Tall (closed phone / portrait / tented):** recipe step on top, timers right below, split 50/50.
-- A clear strip runs down the physical centre of the screen, so no button sits on a fold or hinge.
+## What it does
 
-## Layout
+- **Library.** Save many recipes on three shelves (Food, Drinks, Desserts), with favourites,
+  search and sorting. Ten starter recipes ship with the app and can be deleted.
+- **Import from anywhere, reviewed before saving.**
+  - A recipe page's link: only its schema.org Recipe data is read, never the story text.
+  - A YouTube link, or Share → Hearth from the YouTube app: the video's title and description
+    (and captions, when YouTube serves them).
+  - Pasted text: an Ingredients list and a Method / Instructions list.
+  - Every import opens a review screen first. Nothing is invented: an amount, a time or a serving
+    count the source doesn't give is left blank and listed as "not in the source".
+  - Typing a recipe in by hand is still there, under **+**, as the fallback.
+- **Auto-timers.** A step whose text states a time ("simmer for 15 minutes") gets its own Start
+  button in Cook Mode. Timers are named by step and run side by side.
+- **To-buy list.** From any recipe, tick what you already have; the rest goes on the list. The
+  same item from several recipes becomes one line with the amounts added. Check items off as you shop.
+- **Cook Mode.** One big step at a time, Back / Next, ingredients under the step, servings
+  scaling, and a converter (cups → ml, oz → g, °F → °C). The recipe and the timers are always
+  on screen together.
+
+## Six poses (iPhone Duo)
+
+Each has its own layout, chosen from the real fold APIs (`UIHingeInteraction` for the hinge
+state, the hinge's reserved region for its direction):
+
+| Pose | Layout |
+| --- | --- |
+| Closed | Outer screen, one column: Step, Timers or Convert in focus, with the timer chip pinned on top. |
+| Open flat, landscape | Recipe left, timers right, on the two cream tones. Nothing drawn or tappable on the hinge. |
+| Open flat, portrait | Recipe on top, timers below. |
+| Book | Left page and right page, each a little narrower, with a gutter beside the hinge. |
+| Tented | Outer screen, glanceable: one big step, its timer, the timer chip, Back / Next. |
+| Tabletop | The step on top to look at; ingredients, Back / Next and timers on the deck below. |
+
+Other iPhones and iPads use the plain layout: side by side when wide, stacked when tall.
+
+## Design
+
+- Warm cream two-tone: recipe side `#FAF8F3`, timers side `#F4EFE4`.
+- Fonts: **Lora** for recipe titles only; **Lato** for steps, ingredients, timers and all other
+  text (both under the SIL Open Font License, in `App/Fonts`). Amounts and countdowns use bold,
+  fixed-width figures.
+- French and Italian touches are visual only: tricolore strips, bistro navy and basil green, an
+  Eiffel Tower and a basil leaf. No French or Italian words.
+- The logo (`App/HearthLogo.swift`) is drawn in code; `ci/render-icon.swift` renders the app icon from it.
+
+## Layout of the repo
 
 | Path | What |
 | --- | --- |
-| `CookCore/` | Swift package with the pure logic: fractions and serving scaling, unit converter, timer engine. Tested with `swift test`. |
-| `App/` | SwiftUI + SwiftData app (recipe library, editor, Cook Mode, timers pane). |
-| `UITests/` | XCUITests covering the v1 acceptance tests, saving screenshots along the way. |
+| `CookCore/` | Swift package with the pure logic: fractions and scaling, converter, timers, recipe-page / pasted-text / YouTube reading, step times, to-buy merging. Tested with `swift test`. |
+| `App/` | SwiftUI + SwiftData app. |
+| `ShareExtension/` | Puts Hearth in the iOS Share Sheet and hands the shared link or text to the app. |
+| `UITests/` | XCUITests for the acceptance tests, saving screenshots along the way. |
 | `project.yml` | XcodeGen spec; `xcodegen generate` creates `CountertopCook.xcodeproj`. |
-| `.github/workflows/ci.yml` | Builds on GitHub's macOS runners and runs all tests on iPhone, iPad and any iPhone Duo simulator. |
+| `.github/workflows/ci.yml` | Builds on GitHub's macOS runners and runs all tests on iPhone, iPad and the iPhone Duo simulator (closed, open and half open). |
 
 ## Build
 
-On a Mac with Xcode 15 or later:
+On a Mac with Xcode:
 
 ```bash
 brew install xcodegen
@@ -28,7 +71,7 @@ open CountertopCook.xcodeproj
 ```
 
 Without Xcode, push to GitHub: the CI workflow builds the app and runs every test. Screenshots
-are attached to each run under **Artifacts → test-results**.
+and summaries are published to the `ci-results` and `ci-results-duo` branches.
 
 Core logic only (works with just the Command Line Tools):
 

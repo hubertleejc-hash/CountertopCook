@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// A light French or Italian accent on a recipe: a tricolore strip, a café / trattoria serif for
-/// its headings, an accent colour, a label and a small motif. English stays the app's language;
-/// these only decorate recipes tagged with a cuisine.
+/// A light French or Italian accent on a recipe, visual only: a tricolore strip, an accent
+/// colour (bistro navy or basil green) and a small motif (Eiffel Tower or basil leaf). There are
+/// no French or Italian words anywhere in the app; all text is English.
 enum Cuisine: String, CaseIterable {
     case french, italian
 
-    /// "Recette française" / "Ricetta italiana".
-    var label: String {
+    /// For VoiceOver only; the accent itself has no words.
+    var name: String {
         switch self {
-        case .french: return "Recette française"
-        case .italian: return "Ricetta italiana"
+        case .french: return "French"
+        case .italian: return "Italian"
         }
     }
 
@@ -30,26 +30,10 @@ enum Cuisine: String, CaseIterable {
         }
     }
 
-    /// Headings: an elegant high-contrast café serif for French (Didot, in place of Playfair
-    /// Display, which iOS doesn't ship) and a warmer serif for Italian (Georgia, in place of Lora).
-    func heading(_ size: CGFloat) -> Font {
-        switch self {
-        case .french: return .custom("Didot-Bold", size: size)
-        case .italian: return .custom("Georgia-Bold", size: size)
-        }
-    }
-
-    func text(_ size: CGFloat) -> Font {
-        switch self {
-        case .french: return .custom("Didot", size: size)
-        case .italian: return .custom("Georgia", size: size)
-        }
-    }
-
     static func from(tag: String?) -> Cuisine? {
         guard let tag = tag?.lowercased() else { return nil }
-        if tag.contains("french") || tag.contains("français") || tag.contains("francais") { return .french }
-        if tag.contains("italian") || tag.contains("italia") { return .italian }
+        if tag.contains("french") { return .french }
+        if tag.contains("italian") { return .italian }
         return Cuisine(rawValue: tag)
     }
 }
@@ -73,23 +57,18 @@ struct TricoloreStrip: View {
     }
 }
 
-/// Strip, label and motif in one line: "▬ Recette française 🗼".
+/// The accent in one line: a tricolore strip and the motif. No words.
 struct CuisineBadge: View {
     let cuisine: Cuisine
     var size: CGFloat = 13
 
     var body: some View {
         HStack(spacing: 8) {
-            TricoloreStrip(cuisine: cuisine, width: size * 2.2, height: size * 0.3)
-            Text(cuisine.label)
-                .font(cuisine.text(size))
-                .foregroundStyle(cuisine.accent)
-                .lineLimit(1)
-                .fixedSize()
+            TricoloreStrip(cuisine: cuisine, width: size * 2.6, height: size * 0.32)
             CuisineMotif(cuisine: cuisine, size: size)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(cuisine.label)
+        .accessibilityLabel(cuisine.name)
         .accessibilityIdentifier("cuisineBadge")
     }
 }

@@ -12,12 +12,18 @@ struct CountertopCookApp: App {
         // On-device only: no CloudKit in v1. UI tests get a fresh in-memory store every launch.
         let config = ModelConfiguration(isStoredInMemoryOnly: isUITesting, cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(for: Recipe.self, Ingredient.self, RecipeStep.self, configurations: config)
+            container = try ModelContainer(for: Recipe.self, Ingredient.self, RecipeStep.self, ShoppingItem.self,
+                                           configurations: config)
         } catch {
             fatalError("Could not open the recipe store: \(error)")
         }
         SeedData.seedIfNeeded(container.mainContext, force: isUITesting)
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Lato in the navigation bars too (Lora is kept for recipe titles).
+        if let large = UIFont(name: "Lato-Bold", size: 34), let small = UIFont(name: "Lato-Bold", size: 17) {
+            UINavigationBar.appearance().largeTitleTextAttributes = [.font: large]
+            UINavigationBar.appearance().titleTextAttributes = [.font: small]
+        }
     }
 
     var body: some Scene {

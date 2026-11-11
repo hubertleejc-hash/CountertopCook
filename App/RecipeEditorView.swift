@@ -1,26 +1,89 @@
 import SwiftUI
 import SwiftData
 
+/// The recipe form. Three uses: typing a recipe in by hand, editing a saved one, and reviewing
+/// an import before it is saved (every import stops here first, so it can be corrected).
 struct RecipeEditorView: View {
     let recipe: Recipe?
+    /// True when this is the review of an import.
+    private let reviewing: Bool
+    private let onSaved: ((Recipe) -> Void)?
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var draft: RecipeDraft
 
     init(recipe: Recipe?) {
         self.recipe = recipe
+        reviewing = false
+        onSaved = nil
         _draft = State(initialValue: recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft())
+    }
+
+    /// Review an import: `draft` holds only what the source gave. Nothing is saved until Save.
+    init(review draft: RecipeDraft, onSaved: @escaping (Recipe) -> Void) {
+        recipe = nil
+        reviewing = true
+        self.onSaved = onSaved
+        _draft = State(initialValue: draft)
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                if reviewing {
+                    Section {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Check this against the original before saving.", systemImage: "checkmark.seal")
+                                .font(Theme.body(17, bold: true))
+                            Text("Nothing was guessed. Anything the source didn't give is left blank for you to fill in or leave.")
+                                .font(Theme.body(15, relativeTo: .subheadline))
+                                .foregroundStyle(.secondary)
+                            if !draft.notInSource.isEmpty {
+                                Text("Not in the source: \(draft.notInSource.joined(separator: ", ")).")
+                                    .font(Theme.body(15, bold: true, relativeTo: .subheadline))
+                                    .foregroundStyle(Theme.label)
+                                    .accessibilityIdentifier("reviewMissing")
+                            }
+                            if let source = draft.sourceName, !source.isEmpty {
+                                Text("Source: \(source)")
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("reviewSource")
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("reviewNotice")
+                    }
+                    if let reference = draft.referenceText, !reference.isEmpty {
+                        Section("From the source") {
+                            Text("No ingredient or step list could be read from this. Here is its text to work from:")
+                                .font(Theme.body(15, relativeTo: .subheadline))
+                                .foregroundStyle(.secondary)
+                            ScrollView {
+                                Text(reference)
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 220)
+                            .accessibilityIdentifier("reviewReference")
+                        }
+                    }
+                }
+
                 Section("Recipe") {
                     TextField("Title", text: $draft.title)
-                        .font(.title3)
+                        .font(Theme.title(20))
                         .accessibilityIdentifier("recipeTitle")
+                    Picker("Category", selection: $draft.category) {
+                        ForEach(RecipeCategory.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .accessibilityIdentifier("recipeCategory")
                     Stepper("Servings: \(draft.servings)", value: $draft.servings, in: 1...99)
-                    Stepper("Total time: \(formatMinutes(draft.totalMinutes))", value: $draft.totalMinutes, in: 0...2880, step: 5)
+                        .accessibilityIdentifier("recipeServings")
+                    Stepper(draft.totalMinutes == 0 ? "Total time: not given" : "Total time: \(formatMinutes(draft.totalMinutes))",
+                            value: $draft.totalMinutes, in: 0...2880, step: 5)
+                        .accessibilityIdentifier("recipeTotalTime")
                 }
 
                 Section {
@@ -61,7 +124,7 @@ struct RecipeEditorView: View {
                                 .lineLimit(2...6)
                                 .accessibilityIdentifier("stepText_\(index)")
                             Stepper(step.timerMinutes == 0 ? "No timer" : "Timer: \(step.timerMinutes) min",
-                                    value: $step.timerMinutes, in: 0...600)
+                                    value: $step.timerMinutes, in: 0...1440)
                                 .accessibilityIdentifier("stepTimer_\(index)")
                         }
                         .padding(.vertical, 4)
@@ -81,7 +144,7 @@ struct RecipeEditorView: View {
                     Button {
                         save()
                     } label: {
-                        Text("Save Recipe").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                        Text("Save Recipe").font(Theme.body(17, bold: true)).frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!draft.canSave)
@@ -89,7 +152,8 @@ struct RecipeEditorView: View {
                     .accessibilityIdentifier("saveRecipeBottom")
                 }
             }
-            .navigationTitle(recipe == nil ? "New Recipe" : "Edit Recipe")
+            .navigationTitle(reviewing ? "Review Import" : (recipe == nil ? "New Recipe" : "Edit Recipe"))
+            .font(Theme.body())
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
@@ -113,7 +177,8 @@ struct RecipeEditorView: View {
     }
 
     private func save() {
-        draft.save(into: recipe, context: context)
+        let saved = draft.save(into: recipe, context: context)
         dismiss()
+        onSaved?(saved)
     }
 }

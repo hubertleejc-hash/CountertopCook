@@ -78,7 +78,7 @@ run_tests() {
     RUNNER_RETRY=1 run_tests "$label" "$name" "$destination" "$pose" "$@"
     return
   fi
-  grep -E "Test Case .* (passed|failed)|error:|XCTAssert|NOTE:|FOLD:|CARDS:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
+  grep -E "Test Case .* (passed|failed|skipped)|error:|XCTAssert|NOTE:|FOLD:|CARDS:|POSE:|\*\* TEST" "$OUT/test-$label.log" | tee "$OUT/summary-$label.txt"
   # Surface each failure as an annotation so it shows on the run page.
   grep -E "error:" "$OUT/test-$label.log" | sed -E 's#^.*/(UITests|App)/#\1/#' | sort -u | head -15 \
     | while IFS= read -r line; do echo "::error::[$label] $line"; done

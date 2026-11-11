@@ -1,9 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Merged with the generated Info.plist keys (GENERATE_INFOPLIST_FILE). Local networking lets
-     the link-import UI test load its pages from 127.0.0.1; internet pages still need https. -->
+     the link-import UI test load its pages from 127.0.0.1; internet pages still need https.
+     UIAppFonts: Lora for recipe titles, Lato for everything else (App/Fonts, SIL OFL).
+     hearth:// is how the share extension hands a link or text to the app. -->
 <plist version="1.0">
 <dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Lato-Regular.ttf</string>
+		<string>Lato-Bold.ttf</string>
+		<string>Lora-Bold.ttf</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.hubertlee.countertopcook.import</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>hearth</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

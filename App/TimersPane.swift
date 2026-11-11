@@ -13,6 +13,10 @@ struct TimersPane: View {
     var pinConverter = false
     /// Outer margin around the pane (CookModeView's fold split).
     var margin: CGFloat = 0
+    /// Extra room beside the hinge (book pose).
+    var gutter: CGFloat = 0
+    /// False where the converter has its own place (the closed Duo's Convert focus).
+    var showConverter = true
     @Environment(TimerStore.self) private var store
     @State private var name = ""
     @State private var minutes = 5
@@ -23,23 +27,21 @@ struct TimersPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: dense ? 6 : (compact ? 8 : 12)) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Timers · Minuteurs")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                SectionLabel(text: "Timers")
                     .accessibilityIdentifier("timersHeader")
                 Spacer()
                 if !store.timers.isEmpty {
-                    Text("\(store.timers.count) active").font(.subheadline).foregroundStyle(Theme.muted)
+                    Text("\(store.timers.count) active").font(Theme.text(15)).foregroundStyle(Theme.muted)
                 }
             }
             if !compact {
                 Text("Always on this side")
-                    .font(Theme.title(28))
+                    .font(Theme.text(28, bold: true))
                     .foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if roomy {
                     Text("Change steps, check ingredients — these never leave the screen.")
-                        .font(.body)
+                        .font(Theme.text(17))
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -51,6 +53,7 @@ struct TimersPane: View {
                 VStack(alignment: .leading, spacing: dense ? 6 : 10) {
                     if store.timers.isEmpty {
                         Text("No timers yet. Tap a quick timer, or start one from a step.")
+                            .font(Theme.text(17))
                             .foregroundStyle(Theme.ink)
                             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                     }
@@ -59,18 +62,19 @@ struct TimersPane: View {
                     }
                     customTimer
                         .padding(.top, 6)
-                    if !pinConverter {
+                    if !pinConverter && showConverter {
                         ConverterView()
                             .padding(.top, 6)
                     }
                 }
                 .padding(.vertical, 2)
             }
-            if pinConverter {
+            if pinConverter && showConverter {
                 ConverterView()
             }
         }
         .padding(compact ? 12 : 20)
+        .padding(.leading, gutter)
         .padding(margin)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timersCard")
@@ -104,7 +108,7 @@ struct TimersPane: View {
             start(preset)
         } label: {
             Text(title)
-                .font(.headline)
+                .font(Theme.text(17, bold: true))
                 .lineLimit(1)
                 .padding(.horizontal, dense ? 6 : 18)
                 .frame(maxWidth: dense ? .infinity : nil, minHeight: dense ? 32 : 44)
@@ -123,7 +127,7 @@ struct TimersPane: View {
                 .focused($nameFocused)
                 .accessibilityIdentifier("timerName")
             HStack(spacing: 2) {
-                Text("\(minutes)m").font(.headline).monospacedDigit().foregroundStyle(Theme.ink).frame(minWidth: 36)
+                Text("\(minutes)m").font(Theme.timer(17)).foregroundStyle(Theme.ink).frame(minWidth: 36)
                 Stepper("Minutes", value: $minutes, in: 1...600)
                     .labelsHidden()
                     .accessibilityIdentifier("timerMinutes")
@@ -131,7 +135,7 @@ struct TimersPane: View {
             Button {
                 start(minutes)
             } label: {
-                Text("Start").font(.headline).padding(.horizontal, 16).frame(minHeight: 36)
+                Text("Start").font(Theme.text(17, bold: true)).padding(.horizontal, 16).frame(minHeight: 36)
             }
             .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
             .accessibilityIdentifier("startCustomTimer")
@@ -142,6 +146,54 @@ struct TimersPane: View {
         store.add(name: name, minutes: minutes)
         name = ""
         nameFocused = false
+    }
+}
+
+/// Running timers as a row of chips, name and countdown, always on screen. Used where there is
+/// no room for the whole timers pane (closed and tented poses). A finished timer turns red.
+struct TimerChipBar: View {
+    /// Tapping a chip opens the timers (nil: chips are display only).
+    var onTap: (() -> Void)?
+    @Environment(TimerStore.self) private var store
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Image(systemName: "timer")
+                    .font(.headline)
+                    .foregroundStyle(Theme.label)
+                    .accessibilityHidden(true)
+                if store.timers.isEmpty {
+                    Text("No timers running")
+                        .font(Theme.text(15))
+                        .foregroundStyle(Theme.muted)
+                        .accessibilityIdentifier("timerChipEmpty")
+                }
+                ForEach(store.timers) { timer in
+                    let done = timer.isFinished(at: store.now)
+                    HStack(spacing: 6) {
+                        Text(timer.name)
+                            .font(Theme.text(14, bold: true))
+                            .foregroundStyle(done ? Color.red : Theme.muted)
+                            .lineLimit(1)
+                        Text(TimeFormat.countdown(timer.remaining(at: store.now)))
+                            .font(Theme.timer(18))
+                            .foregroundStyle(done ? Color.red : (timer.isPaused ? Theme.muted : Theme.ink))
+                            .accessibilityIdentifier("timerCountdown_\(timer.name)")
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(done ? Color.red.opacity(0.18) : Theme.card, in: Capsule())
+                    .accessibilityElement(children: .contain)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .frame(height: 40)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("timerChipBar")
     }
 }
 
@@ -202,8 +254,8 @@ struct TimerCard: View {
                 HStack(spacing: 8) {
                     countdown(done: done, size: 30)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(timer.name).font(.subheadline.bold()).foregroundStyle(Theme.ink).lineLimit(1)
-                        status(done: done).font(.caption.bold())
+                        Text(timer.name).font(Theme.text(15, bold: true)).foregroundStyle(Theme.ink).lineLimit(1)
+                        status(done: done).font(Theme.text(12, bold: true))
                     }
                     Spacer(minLength: 4)
                     buttons(done: done, size: 44)
@@ -213,9 +265,9 @@ struct TimerCard: View {
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(timer.name).font(.headline).foregroundStyle(Theme.ink).lineLimit(1)
+                        Text(timer.name).font(Theme.text(17, bold: true)).foregroundStyle(Theme.ink).lineLimit(1)
                         Spacer()
-                        status(done: done).font(.headline)
+                        status(done: done).font(Theme.text(17, bold: true))
                     }
                     HStack(spacing: 8) {
                         countdown(done: done, size: compact ? 40 : 56)
@@ -306,7 +358,7 @@ struct ConverterView: View {
                         to = pair.2
                     } label: {
                         Text(pair.3)
-                            .font(.subheadline.weight(.semibold))
+                            .font(Theme.text(15, bold: true))
                             .lineLimit(1)
                             .fixedSize()
                             .padding(.horizontal, 12)
@@ -322,7 +374,7 @@ struct ConverterView: View {
             HStack(spacing: 6) {
                 TextField("1", text: $input)
                     .keyboardType(.numbersAndPunctuation)
-                    .font(.title3)
+                    .font(Theme.timer(20))
                     .padding(.horizontal, 10)
                     .frame(width: 64, height: 40)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.beige, lineWidth: 2))

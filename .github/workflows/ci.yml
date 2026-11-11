@@ -16,7 +16,7 @@ jobs:
   # iPhone Duo on iOS 27.1. Needs the xcode-27 image (Apple silicon, public preview).
   duo:
     runs-on: xcode-27
-    timeout-minutes: 75
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +76,7 @@ jobs:
   # no iPhone 17 Pro, and this job keeps working if the preview image is unavailable.
   fallback:
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 

@@ -26,12 +26,23 @@ enum Theme {
 
     static let cardRadius: CGFloat = 24
 
-    /// Recipe title: New York Bold.
-    static func title(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .serif) }
-    /// Current step: large SF Pro, readable from across the counter.
-    static func step(compact: Bool) -> Font { .system(size: compact ? 26 : 38, weight: .regular) }
-    /// Timer numbers: SF Pro Rounded with tabular figures.
-    static func timer(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .rounded).monospacedDigit() }
+    /// Recipe titles only: Lora Bold.
+    static func title(_ size: CGFloat) -> Font { .custom("Lora-Bold", fixedSize: size) }
+    /// Everything else: Lato. Fixed sizes in Cook Mode, where the layout is measured to the point.
+    static func text(_ size: CGFloat, bold: Bool = false) -> Font {
+        .custom(bold ? "Lato-Bold" : "Lato-Regular", fixedSize: size)
+    }
+    /// Lato that follows the reader's text size, for the library, forms and lists.
+    static func body(_ size: CGFloat = 17, bold: Bool = false, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(bold ? "Lato-Bold" : "Lato-Regular", size: size, relativeTo: style)
+    }
+    /// Current step: large Lato, readable from across the counter.
+    static func step(compact: Bool) -> Font { text(compact ? 26 : 38) }
+    /// Extra space between the lines of the step, so a long step doesn't read as a block.
+    static func stepLineSpacing(compact: Bool) -> CGFloat { compact ? 3 : 4 }
+    /// Timer numbers and amounts: Lato Bold with lining, fixed-width figures, so 1, 7 and 0 are
+    /// full height and a countdown doesn't jiggle as it ticks.
+    static func timer(_ size: CGFloat) -> Font { text(size, bold: true).monospacedDigit() }
 }
 
 extension Color {
@@ -49,7 +60,7 @@ extension UIColor {
 struct SectionLabel: View {
     let text: String
     var color = Theme.label
-    var font: Font = .subheadline.weight(.semibold)
+    var font: Font = Theme.text(14, bold: true)
 
     var body: some View {
         Text(text.uppercased())

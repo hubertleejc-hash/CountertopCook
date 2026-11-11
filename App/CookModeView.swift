@@ -7,15 +7,41 @@ func ingredientLine(_ item: Ingredient, servingsFrom base: Int, to servings: Int
     return [amount, item.unit, item.name].filter { !$0.isEmpty }.joined(separator: " ")
 }
 
-/// Cook Mode: the recipe and the timers are always on screen together.
-/// - Unfolded iPhone Duo (hinge partially or fully open): a `UIArrangementViewController` split,
-///   recipe leading or on top, timers trailing or below, with the gap on the hinge's reserved
-///   region (see FoldSplit.swift).
-/// - Otherwise, wide (landscape, iPad): recipe left, timers right, 50/50.
-/// - Otherwise, tall (closed Duo, portrait phone): recipe step on top, timers below, 50/50.
-/// Off the Duo split, a clear gap runs down the middle so no button sits on the centre line.
-/// Styled after reference-design.png: one cream page under both halves and the gap, with nothing
-/// drawn on the hinge; the two halves are always the same size.
+/// The scaled amount with a trailing space ("1 1/2 "), or "" when the ingredient has none.
+func ingredientAmount(_ item: Ingredient, servingsFrom base: Int, to servings: Int) -> String {
+    let amount = Scaler.scale(item.amountText, from: base, to: servings)
+    return amount.isEmpty ? "" : amount + " "
+}
+
+/// Unit and name: "cup grated parmesan".
+func ingredientRest(_ item: Ingredient) -> String {
+    [item.unit, item.name].filter { !$0.isEmpty }.joined(separator: " ")
+}
+
+/// How Cook Mode is laid out. An iPhone Duo has six poses, each with its own layout; other
+/// devices use `plain`.
+enum CookPose: String, CaseIterable {
+    /// Not a folding phone: recipe and timers side by side when wide, stacked when tall.
+    case plain
+    /// Folded shut, on the outer screen: one focus at a time under a pinned timer chip.
+    case closed
+    /// Half open and standing like a tent, on the outer screen: one big step and the timer chip.
+    case tented
+    /// Open flat, hinge top to bottom: recipe left, timers right.
+    case openLandscape
+    /// Open flat, hinge across: recipe on top, timers below.
+    case openPortrait
+    /// Half open like a book, hinge top to bottom: a left page and a right page.
+    case book
+    /// Half open on a table, hinge across: what you look at on top, what you touch below.
+    case tabletop
+}
+
+/// Cook Mode: the recipe and the timers are always on screen together, in the layout for the
+/// device's pose (see `CookPose`). The hinge state comes from `UIHingeInteraction` and the
+/// hinge's direction from its reserved region (FoldSplit.swift).
+/// Styled after reference-design.png: pale cream under the recipe, warm cream under the timers,
+/// nothing drawn on the hinge and nothing tappable on it.
 struct CookModeView: View {
     let recipe: Recipe
     @Environment(TimerStore.self) private var timers
@@ -25,8 +51,16 @@ struct CookModeView: View {
     @State private var checked: Set<PersistentIdentifier> = []
     @State private var finished = false
     @State private var fold = FoldPosture.none
-    /// Which way the hinge runs while unfolded: true side by side, false stacked (tabletop).
-    @State private var hingeVertical = true
+    /// Which way the hinge runs while unfolded: true top to bottom (panes side by side), false
+    /// across (panes stacked), nil when the screen Cook Mode is on has no hinge region.
+    @State private var hingeVertical: Bool? = true
+    @State private var rootSize = CGSize.zero
+    /// Closed pose: what the single column is showing.
+    @State private var focus = Focus.step
+
+    enum Focus: String, CaseIterable {
+        case step = "Step", timers = "Timers", convert = "Convert"
+    }
 
     /// Width of the empty strip kept between the two panes (where a hinge would be).
     static let hingeGap: CGFloat = 28
@@ -34,22 +68,68 @@ struct CookModeView: View {
     static let densePaneHeight: CGFloat = 420
     /// From this timers-pane height up there's room for the line under "Always on this side".
     static let roomyPaneHeight: CGFloat = 760
+    /// Extra room each page keeps beside the hinge in the book pose.
+    static let bookGutter: CGFloat = 12
+
+    /// UI tests and previews can ask for one pose's layout by name (COOK_POSE=tented), for the
+    /// poses a simulator can't be put into.
+    static let poseOverride = CookPose(rawValue: ProcessInfo.processInfo.environment["COOK_POSE"] ?? "")
 
     init(recipe: Recipe) {
         self.recipe = recipe
         _servings = State(initialValue: recipe.servings)
     }
 
+    private var pose: CookPose {
+        if let forced = Self.poseOverride { return forced }
+        switch fold {
+        case .closed:
+            return .closed
+        case .fullyOpen:
+            return hingeVertical == false ? .openPortrait : .openLandscape
+        case .partiallyOpen:
+            // Half open with no hinge region on this screen: Cook Mode is on the outer screen.
+            let small = rootSize != .zero && min(rootSize.width, rootSize.height) < 600
+            if hingeVertical == nil && small { return .tented }
+            return hingeVertical == false ? .tabletop : .book
+        case .none, .unknown:
+            return .plain
+        }
+    }
+
     var body: some View {
-        Group {
-            if let split = foldSplit {
-                split
-            } else {
+        let pose = self.pose
+        return Group {
+            switch pose {
+            case .plain:
                 stackedLayout
+            case .closed:
+                focusLayout
+            case .tented:
+                tentedLayout
+            case .openLandscape, .openPortrait, .book, .tabletop:
+                if Self.poseOverride == nil, let split = foldSplit(pose) {
+                    split
+                } else {
+                    previewSplit(pose)
+                }
             }
         }
         .background(alignment: .topLeading) { HingeProbe(posture: $fold) }
-        .background(Theme.background.ignoresSafeArea())
+        .background(alignment: .topLeading) {
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityLabel(pose.rawValue)
+                .accessibilityIdentifier("cookPose")
+        }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { rootSize = geo.size }
+                    .onChange(of: geo.size) { _, size in rootSize = size }
+            }
+        }
+        .background((pose == .plain ? Theme.background : Color(Theme.recipeSideUI)).ignoresSafeArea())
         .environment(\.colorScheme, .light)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -63,38 +143,42 @@ struct CookModeView: View {
         }
     }
 
-    /// The arrangement-view split, only while an iPhone Duo's hinge is open. Side by side (open
-    /// flat landscape, or book) the recipe leads and the timers trail; stacked (open flat
-    /// portrait) the recipe is on top. Tabletop (half open, hinge across) puts what you look at
-    /// on top and what you touch, ingredients, Back / Next and timers, on the deck below.
-    private var foldSplit: AnyView? {
+    // MARK: Unfolded poses (the hinge's own split)
+
+    /// The arrangement-view split for the four unfolded poses. The arrangement puts the first
+    /// pane leading (hinge top to bottom) or on top (hinge across).
+    /// - Open flat landscape: recipe left, timers right.
+    /// - Book: the same two pages, each a little narrower, with a gutter beside the hinge.
+    /// - Open flat portrait: recipe on top, timers below.
+    /// - Tabletop: the step on top to look at; ingredients, Back / Next and timers on the deck.
+    private func foldSplit(_ pose: CookPose) -> AnyView? {
         #if FOLD_APIS
         if #available(iOS 27.1, *), fold.isUnfolded {
             let margin: CGFloat = 8
-            let tabletop = fold == .partiallyOpen && !hingeVertical
+            let gutter = pose == .book ? Self.bookGutter : 0
             return AnyView(
                 FoldSplitView(
                     primary: GeometryReader { pane in
-                        let compact = pane.size.height < 500 || pane.size.width < 320
-                        if tabletop {
-                            lookPane(compact: compact, margin: margin)
+                        if pose == .tabletop {
+                            lookPane(compact: pane.size.width < 320, margin: margin)
                         } else {
-                            recipePane(compact: compact, tight: true, margin: margin)
+                            recipePane(compact: pane.size.width < 320, tight: true, margin: margin, gutter: gutter)
                         }
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light),
                     secondary: GeometryReader { pane in
-                        if tabletop {
-                            deckPane(compact: true, margin: margin)
+                        if pose == .tabletop {
+                            deckPane(margin: margin)
                         } else {
-                        // Converter pinned at the bottom and one-line timer rows, so the whole
-                        // CONVERT card fits in the unfolded Duo's short half.
-                        TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
-                                   dense: true,
-                                   roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
-                                   pinConverter: true,
-                                   margin: margin)
+                            // Converter pinned at the bottom and one-line timer rows, so the whole
+                            // CONVERT card fits in the unfolded Duo's short half.
+                            TimersPane(compact: pane.size.width < 320,
+                                       dense: true,
+                                       roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
+                                       pinConverter: true,
+                                       margin: margin,
+                                       gutter: gutter)
                         }
                     }
                     .environment(timers)
@@ -107,6 +191,123 @@ struct CookModeView: View {
         #endif
         return nil
     }
+
+    /// The same four layouts without a hinge, for COOK_POSE previews: two panes on the two
+    /// cream tones, side by side or stacked.
+    private func previewSplit(_ pose: CookPose) -> some View {
+        let margin: CGFloat = 8
+        let gutter = pose == .book ? Self.bookGutter : 0
+        let half = Self.hingeGap / 2
+        let pale = Color(Theme.recipeSideUI), warm = Color(Theme.timersSideUI)
+        return GeometryReader { geo in
+            if pose == .openLandscape || pose == .book {
+                HStack(spacing: 0) {
+                    recipePane(compact: geo.size.width / 2 < 320, tight: true, margin: margin, gutter: gutter)
+                        .padding(.trailing, half)
+                        .frame(width: geo.size.width / 2)
+                        .background(pale.ignoresSafeArea())
+                    TimersPane(compact: geo.size.width / 2 < 320, dense: true, pinConverter: true, margin: margin, gutter: gutter)
+                        .padding(.leading, half)
+                        .frame(width: geo.size.width / 2)
+                        .background(warm.ignoresSafeArea())
+                }
+            } else {
+                // On a small screen the halves are short: use the compact text sizes there.
+                let compact = geo.size.width < 320 || geo.size.height / 2 < 400
+                VStack(spacing: 0) {
+                    Group {
+                        if pose == .tabletop {
+                            lookPane(compact: compact, margin: margin)
+                        } else {
+                            recipePane(compact: compact, tight: true, margin: margin)
+                        }
+                    }
+                    .padding(.bottom, half)
+                    .frame(height: geo.size.height / 2)
+                    .background(pale.ignoresSafeArea())
+                    Group {
+                        if pose == .tabletop {
+                            deckPane(margin: margin)
+                        } else {
+                            TimersPane(compact: true, dense: true, margin: margin)
+                        }
+                    }
+                    .padding(.top, half)
+                    .frame(height: geo.size.height / 2)
+                    .background(warm.ignoresSafeArea())
+                }
+            }
+        }
+    }
+
+    // MARK: Closed and tented (outer screen, one column)
+
+    /// Closed: the timer chip stays pinned at the top; below it one thing at a time, the step
+    /// (with ingredients, servings and Back / Next), the timers, or the converter.
+    private var focusLayout: some View {
+        VStack(spacing: 8) {
+            TimerChipBar { focus = .timers }
+                .padding(.horizontal, 16)
+            HStack(spacing: 8) {
+                ForEach(Focus.allCases, id: \.self) { item in
+                    Button {
+                        focus = item
+                    } label: {
+                        Text(item.rawValue)
+                            .font(Theme.text(16, bold: true))
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                    }
+                    .buttonStyle(SoftButtonStyle(fill: focus == item ? Theme.pill : Theme.beige,
+                                                 foreground: focus == item ? .white : Theme.ink))
+                    .accessibilityValue(focus == item ? "selected" : "")
+                    .accessibilityIdentifier("focus_\(item.rawValue.lowercased())")
+                }
+            }
+            .padding(.horizontal, 16)
+            switch focus {
+            case .step:
+                recipePane(compact: rootSize.width < 380, tight: true)
+            case .timers:
+                TimersPane(compact: true, showConverter: false)
+            case .convert:
+                ScrollView {
+                    ConverterView().padding(16)
+                }
+            }
+        }
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Tented: glanceable from across the counter. Just the step, big, its timer, the timer
+    /// chip and Back / Next.
+    private var tentedLayout: some View {
+        let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                exitButton
+                progressLabel
+                StepProgressBar(value: progressValue)
+                    .accessibilityIdentifier("stepProgress")
+            }
+            TimerChipBar(onTap: nil)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    stepText(step, compact: false)
+                    if let minutes = step?.timerMinutes, minutes > 0 {
+                        stepTimerButton(minutes: minutes)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            navigationButtons(compact: false)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .overlay { if finished { finishedOverlay } }
+    }
+
+    // MARK: Not a folding phone
 
     private var stackedLayout: some View {
         // Measure the whole screen (not just the safe area) so the gap sits on the physical
@@ -165,21 +366,12 @@ struct CookModeView: View {
         return VStack(alignment: .leading, spacing: 8) {
             header(compact: compact)
             HStack(spacing: 12) {
-                Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
-                    .font(.headline.weight(.regular))
-                    .foregroundStyle(Theme.muted)
-                    .fixedSize()
-                    .accessibilityIdentifier("stepProgressLabel")
-                StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
+                progressLabel
+                StepProgressBar(value: progressValue)
                     .accessibilityIdentifier("stepProgress")
             }
             ScrollView {
-                Text(step?.text ?? "This recipe has no steps yet.")
-                    .font(Theme.step(compact: compact))
-                    .foregroundStyle(Theme.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("stepText")
+                stepText(step, compact: compact)
             }
         }
         .padding(.horizontal, compact ? 12 : 20)
@@ -191,7 +383,7 @@ struct CookModeView: View {
     }
 
     /// The bottom half on a tabletop: ingredients and Back / Next on the left, timers on the right.
-    private func deckPane(compact: Bool, margin: CGFloat) -> some View {
+    private func deckPane(margin: CGFloat) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
         return HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
@@ -219,38 +411,52 @@ struct CookModeView: View {
     private var steps: [RecipeStep] { recipe.sortedSteps }
     private var isLastStep: Bool { stepIndex >= steps.count - 1 }
 
-    /// `tight`: the unfolded Duo's short half. Same fonts, but less spacing, the step count
-    /// beside its bar and shorter Back / Next, so the ingredients show under a long step.
-    private func recipePane(compact: Bool, tight: Bool = false, margin: CGFloat = 0) -> some View {
+    private var progressValue: Double {
+        Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1))
+    }
+
+    private var progressLabel: some View {
+        Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
+            .font(Theme.text(17))
+            .foregroundStyle(Theme.muted)
+            .fixedSize()
+            .accessibilityIdentifier("stepProgressLabel")
+    }
+
+    /// The current step: large Lato with open line spacing.
+    private func stepText(_ step: RecipeStep?, compact: Bool, tight: Bool = false) -> some View {
+        Text(step?.text ?? "This recipe has no steps yet.")
+            .font(Theme.step(compact: compact))
+            .lineSpacing(tight ? 3 : Theme.stepLineSpacing(compact: compact))
+            .foregroundStyle(Theme.ink)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("stepText")
+    }
+
+    /// `tight`: a short pane (the unfolded Duo's halves, the closed Duo). Same fonts, but less
+    /// spacing, the step count beside its bar and shorter Back / Next, so the ingredients show
+    /// under a long step. `gutter`: extra room beside the hinge (book pose).
+    private func recipePane(compact: Bool, tight: Bool = false, margin: CGFloat = 0, gutter: CGFloat = 0) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
         let roomy = !compact && !tight
-        return VStack(alignment: .leading, spacing: roomy ? 14 : 8) {
+        return VStack(alignment: .leading, spacing: roomy ? 14 : (tight ? 6 : 8)) {
             header(compact: compact)
-            let progress = Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
-                .font(.headline.weight(.regular))
-                .foregroundStyle(Theme.muted)
-                .fixedSize()
-                .accessibilityIdentifier("stepProgressLabel")
-            let bar = StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
+            let bar = StepProgressBar(value: progressValue)
                 .accessibilityIdentifier("stepProgress")
             if tight {
-                HStack(spacing: 12) { progress; bar }
+                HStack(spacing: 12) { progressLabel; bar }
             } else {
-                progress
+                progressLabel
                 bar
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: roomy ? 22 : (tight ? 10 : 14)) {
-                    Text(step?.text ?? "This recipe has no steps yet.")
-                        .font(Theme.step(compact: compact))
-                        .foregroundStyle(Theme.ink)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("stepText")
+                    stepText(step, compact: compact, tight: tight)
 
                     if let minutes = step?.timerMinutes, minutes > 0 {
-                        stepTimerButton(minutes: minutes)
+                        stepTimerButton(minutes: minutes, tight: tight)
                     }
 
                     ingredientChecklist(tight: tight)
@@ -264,6 +470,7 @@ struct CookModeView: View {
         // halves' content is the same width.
         .padding(.horizontal, compact ? 12 : 20)
         .padding(.vertical, roomy ? 20 : 12)
+        .padding(.trailing, gutter)
         .padding(margin)
         .overlay {
             if finished {
@@ -274,15 +481,16 @@ struct CookModeView: View {
         .accessibilityIdentifier("recipeCard")
     }
 
-    /// The black "Start N min timer" pill.
-    private func stepTimerButton(minutes: Int) -> some View {
+    /// The black "Start N min timer" pill. Each timed step has its own; the timer it starts is
+    /// named after the step, so several can run side by side.
+    private func stepTimerButton(minutes: Int, tight: Bool = false) -> some View {
         Button {
             timers.add(name: "Step \(stepIndex + 1)", minutes: minutes)
         } label: {
             Label("Start \(minutes) min timer", systemImage: "play.fill")
-                .font(.title3.weight(.semibold))
+                .font(Theme.text(20, bold: true))
                 .padding(.horizontal, 22)
-                .frame(minHeight: 52)
+                .frame(minHeight: tight ? 48 : 52)
         }
         .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
         .accessibilityIdentifier("startStepTimer")
@@ -292,38 +500,33 @@ struct CookModeView: View {
     private func header(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 8) {
             HStack(spacing: 10) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(SoftButtonStyle(circle: true))
-                .accessibilityLabel("Exit Cook Mode")
-                .accessibilityIdentifier("exitCook")
-                // English first, the Italian second when the row has room for it.
-                ViewThatFits(in: .horizontal) {
-                    SectionLabel(text: "Cook Mode · La cucina")
-                    VStack(alignment: .leading, spacing: 0) {
-                        SectionLabel(text: "Cook Mode")
-                        SectionLabel(text: "La cucina", color: Theme.muted, font: .caption.weight(.semibold))
-                    }
-                    SectionLabel(text: "Cook Mode")
-                }
+                exitButton
+                SectionLabel(text: "Cook Mode")
                 Spacer(minLength: 4)
                 servingsControl
             }
-            let cuisine = recipe.cuisineKind
             Text(recipe.title)
-                .font(cuisine?.heading(compact ? 24 : 32) ?? Theme.title(compact ? 24 : 32))
+                .font(Theme.title(compact ? 24 : 32))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
-            if let cuisine {
+            if let cuisine = recipe.cuisineKind {
                 CuisineBadge(cuisine: cuisine, size: compact ? 12 : 13)
             }
         }
+    }
+
+    private var exitButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.headline)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(SoftButtonStyle(circle: true))
+        .accessibilityLabel("Exit Cook Mode")
+        .accessibilityIdentifier("exitCook")
     }
 
     /// A beige pill: white − and + circles around "N servings".
@@ -338,8 +541,7 @@ struct CookModeView: View {
             .accessibilityIdentifier("servingsMinus")
 
             Text("\(servings) servings")
-                .font(.headline.weight(.medium))
-                .monospacedDigit()
+                .font(Theme.text(17, bold: true).monospacedDigit())
                 .foregroundStyle(Theme.ink)
                 .fixedSize()
                 .accessibilityIdentifier("servingsLabel")
@@ -361,7 +563,7 @@ struct CookModeView: View {
     /// rows fit under a long step on the unfolded Duo.
     private func ingredientChecklist(tight: Bool) -> some View {
         VStack(alignment: .leading, spacing: tight ? 4 : 6) {
-            SectionLabel(text: servings == recipe.servings ? "Ingredients · Mise en place" : "Ingredients · for \(servings)",
+            SectionLabel(text: servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)",
                          color: Theme.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -376,8 +578,9 @@ struct CookModeView: View {
                             .font(.title2)
                             .foregroundStyle(done ? Theme.accent : Theme.muted)
                             .accessibilityHidden(true)
-                        Text(ingredientLine(item, servingsFrom: recipe.servings, to: servings))
-                            .font(.title3)
+                        // The amount in bold, fixed-width figures: 1/2 and 1/3 are told apart at a glance.
+                        (Text(ingredientAmount(item, servingsFrom: recipe.servings, to: servings)).font(Theme.timer(20))
+                         + Text(ingredientRest(item)).font(Theme.text(20)))
                             .strikethrough(done)
                             .foregroundStyle(done ? Theme.muted : Theme.ink)
                             .multilineTextAlignment(.leading)
@@ -430,7 +633,7 @@ struct CookModeView: View {
                 .accessibilityIdentifier("nextStep")
             }
         }
-        .font(.title2.weight(.semibold))
+        .font(Theme.text(22, bold: true))
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
@@ -443,30 +646,27 @@ struct CookModeView: View {
                 .foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("finishedMessage")
-            Text("Buon appetito — bon appétit")
-                .font(.system(size: 20, design: .serif).italic())
-                .foregroundStyle(Theme.muted)
             Button {
                 dismiss()
             } label: {
-                Text("Done").font(.title2.bold()).frame(maxWidth: 240, minHeight: 60)
+                Text("Done").font(Theme.text(22, bold: true)).frame(maxWidth: 240, minHeight: 60)
             }
             .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
             .accessibilityIdentifier("doneCooking")
             Button("Back to steps") {
                 withAnimation { finished = false }
             }
-            .font(.headline)
+            .font(Theme.text(17, bold: true))
             .tint(Theme.label)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.background)
+        .background(pose == .plain ? Theme.background : Color(Theme.recipeSideUI))
     }
 }
 
 /// Orange fill on a beige track, rounded.
-private struct StepProgressBar: View {
+struct StepProgressBar: View {
     let value: Double
 
     var body: some View {

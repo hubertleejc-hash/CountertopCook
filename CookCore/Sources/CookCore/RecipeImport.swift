@@ -23,6 +23,8 @@ public struct ImportedRecipe: Equatable {
     public var siteName: String
     /// recipeCuisine, as published ("French", "Italian", …); nil when the page gives none.
     public var cuisine: String?
+    /// recipeCategory, as published ("Dessert", "Drinks", …); nil when the page gives none.
+    public var category: String? = nil
 }
 
 public enum RecipeImportError: Error, Equatable, LocalizedError {
@@ -65,7 +67,8 @@ public enum RecipeImporter {
             ingredients: ingredients,
             steps: steps,
             siteName: siteName(html: html, blocks: blocks, recipe: recipe, url: url),
-            cuisine: strings(recipe["recipeCuisine"]).map(clean).first { !$0.isEmpty })
+            cuisine: strings(recipe["recipeCuisine"]).map(clean).first { !$0.isEmpty },
+            category: strings(recipe["recipeCategory"]).map(clean).first { !$0.isEmpty })
     }
 
     // MARK: JSON-LD

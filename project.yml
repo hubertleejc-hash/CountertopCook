@@ -20,13 +20,16 @@ targets:
     sources: [App]
     dependencies:
       - package: CookCore
+      # Puts Hearth in the iOS Share Sheet (YouTube, Safari, Notes…); see ShareExtension/.
+      - target: HearthShare
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hubertlee.countertopcook
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Config/App-Info.plist
-        INFOPLIST_KEY_CFBundleDisplayName: Countertop Cook
+        INFOPLIST_KEY_CFBundleDisplayName: Hearth
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -37,6 +40,26 @@ targets:
         # reserved regions) exist only in the iOS 27 SDK. Older SDKs build without them.
         "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator27*]": "$(inherited) FOLD_APIS"
         "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos27*]": "$(inherited) FOLD_APIS"
+  HearthShare:
+    type: app-extension
+    platform: iOS
+    sources: [ShareExtension]
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Hearth
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hubertlee.countertopcook.share
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
   CountertopCookUITests:
     type: bundle.ui-testing
     platform: iOS

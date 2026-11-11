@@ -78,8 +78,9 @@ struct FoldSplitView<Primary: View, Secondary: View>: UIViewControllerRepresenta
     let primary: Primary
     let secondary: Secondary
     /// Called when the hinge's direction is known or changes: true when it runs top to bottom
-    /// (panes side by side), false when it runs across (panes stacked, as on a tabletop).
-    var onHingeAxis: ((Bool) -> Void)? = nil
+    /// (panes side by side), false when it runs across (panes stacked, as on a tabletop), nil
+    /// when this screen has no hinge region at all (the outer screen).
+    var onHingeAxis: ((Bool?) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> FoldSplitController {
         let controller = FoldSplitController(primary: AnyView(primary), secondary: AnyView(secondary))
@@ -99,8 +100,9 @@ final class FoldSplitController: UIViewController {
     private let primaryHost: UIHostingController<AnyView>
     private let secondaryHost: UIHostingController<AnyView>
     private let hingeView = HingeGapView()
-    var onHingeAxis: ((Bool) -> Void)?
-    private var reportedVertical: Bool?
+    var onHingeAxis: ((Bool?) -> Void)?
+    /// What was last reported: nothing yet, or the axis (nil for no hinge region).
+    private var reported: Bool??
     /// The recipe half's paler tone, laid over the warm root up to the hinge's centre line.
     private let recipeSide = UIView()
 
@@ -160,6 +162,7 @@ final class FoldSplitController: UIViewController {
         let region = regions.first(where: \.isActive) ?? regions.first
         guard let region, !region.frame.isNull, region.frame.width > 0 || region.frame.height > 0 else {
             recipeSide.frame = primaryHost.view.convert(primaryHost.view.bounds, to: view)
+            report(nil)
             hingeView.isHidden = true
             setInsets(.zero, on: primaryHost)
             setInsets(.zero, on: secondaryHost)
@@ -174,11 +177,7 @@ final class FoldSplitController: UIViewController {
             : region.frame.insetBy(dx: 0, dy: min(0, (region.frame.height - minimum) / 2))
         hingeView.isHidden = false
         hingeView.frame = hinge
-        if reportedVertical != vertical {
-            reportedVertical = vertical
-            let report = onHingeAxis
-            DispatchQueue.main.async { report?(vertical) }
-        }
+        report(vertical)
         // Pale tone on the recipe's side of the hinge's centre line; the root is the warm tone.
         let recipe = primaryHost.view.convert(primaryHost.view.bounds, to: view)
         let (first, second) = vertical
@@ -220,6 +219,14 @@ final class FoldSplitController: UIViewController {
         for (host, insets) in zip(hosts, extra) {
             setInsets(insets, on: host)
         }
+    }
+
+    /// Tells SwiftUI the hinge's direction, once per change and outside the layout pass.
+    private func report(_ vertical: Bool?) {
+        if let reported, reported == vertical { return }
+        reported = .some(vertical)
+        let callback = onHingeAxis
+        DispatchQueue.main.async { callback?(vertical) }
     }
 
     /// Extra safe-area insets that keep a pane's content off the part of `hinge` it overlaps.
