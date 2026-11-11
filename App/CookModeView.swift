@@ -382,27 +382,32 @@ struct CookModeView: View {
         .accessibilityIdentifier("recipeCard")
     }
 
-    /// The bottom half on a tabletop: ingredients and Back / Next on the left, timers on the right.
+    /// The bottom half on a tabletop, the touch deck: ingredients (and the step's timer) on the
+    /// left, timers on the right, in two equal columns, with Back / Next across the bottom,
+    /// nearest the cook.
     private func deckPane(margin: CGFloat) -> some View {
         let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
-        return HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if let minutes = step?.timerMinutes, minutes > 0 {
-                            stepTimerButton(minutes: minutes)
+        return VStack(spacing: 8) {
+            GeometryReader { geo in
+                let column = max(0, (geo.size.width - 16) / 2)
+                HStack(alignment: .top, spacing: 16) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if let minutes = step?.timerMinutes, minutes > 0 {
+                                stepTimerButton(minutes: minutes, tight: true)
+                            }
+                            ingredientChecklist(tight: true)
                         }
-                        ingredientChecklist(tight: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .frame(width: column)
+                    TimersPane(compact: true, dense: true, margin: 0)
+                        .frame(width: column)
                 }
-                navigationButtons(compact: true)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            TimersPane(compact: true, dense: true, margin: 0)
-                .frame(maxWidth: .infinity)
+            navigationButtons(compact: true)
         }
+        .padding(12)
         .padding(margin)
     }
 
@@ -489,6 +494,8 @@ struct CookModeView: View {
         } label: {
             Label("Start \(minutes) min timer", systemImage: "play.fill")
                 .font(Theme.text(20, bold: true))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .padding(.horizontal, 22)
                 .frame(minHeight: tight ? 48 : 52)
         }
@@ -501,7 +508,20 @@ struct CookModeView: View {
         VStack(alignment: .leading, spacing: compact ? 4 : 8) {
             HStack(spacing: 10) {
                 exitButton
-                SectionLabel(text: "Cook Mode")
+                // On one line, else one word per line; never broken inside a word. In a very
+                // narrow page it gives way to the servings control.
+                ViewThatFits(in: .horizontal) {
+                    SectionLabel(text: "Cook Mode").fixedSize()
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionLabel(text: "Cook").fixedSize()
+                        SectionLabel(text: "Mode").fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionLabel(text: "Cook", font: Theme.text(11, bold: true)).fixedSize()
+                        SectionLabel(text: "Mode", font: Theme.text(11, bold: true)).fixedSize()
+                    }
+                    Color.clear.frame(width: 0, height: 0)
+                }
                 Spacer(minLength: 4)
                 servingsControl
             }

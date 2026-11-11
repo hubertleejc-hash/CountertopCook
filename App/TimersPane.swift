@@ -135,7 +135,7 @@ struct TimersPane: View {
             Button {
                 start(minutes)
             } label: {
-                Text("Start").font(Theme.text(17, bold: true)).padding(.horizontal, 16).frame(minHeight: 36)
+                Text("Start").font(Theme.text(17, bold: true)).lineLimit(1).fixedSize().padding(.horizontal, 16).frame(minHeight: 36)
             }
             .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
             .accessibilityIdentifier("startCustomTimer")

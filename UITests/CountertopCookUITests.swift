@@ -702,6 +702,8 @@ final class CountertopCookUITests: XCTestCase {
     /// Takes a screenshot and checks every Cook Mode control and both timers are on screen,
     /// unclipped, tappable, and clear of the status bar.
     private func checkVisible(_ name: String) {
+        // Let a step change finish animating, so the screenshot isn't two steps cross-fading.
+        Thread.sleep(forTimeInterval: 0.8)
         snapshot(name)
         let window = app.windows.firstMatch.frame
         let next = element("nextStep").exists ? "nextStep" : "finishCooking"
