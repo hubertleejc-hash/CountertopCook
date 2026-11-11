@@ -25,8 +25,6 @@ struct CountertopCookApp: App {
             UINavigationBar.appearance().largeTitleTextAttributes = [.font: large, .foregroundColor: ink]
             UINavigationBar.appearance().titleTextAttributes = [.font: small, .foregroundColor: ink]
         }
-        // Bar buttons, back chevrons, switches and pickers in UIKit-drawn controls: burnt orange.
-        UIView.appearance().tintColor = UIColor(hex: 0xD96A2B)
     }
 
     var body: some Scene {

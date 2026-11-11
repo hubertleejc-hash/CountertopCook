@@ -566,17 +566,17 @@ struct CookModeView: View {
     /// Height of the fade at the bottom of a scrolling list, where rows pass under Back / Next.
     static let fadeHeight: CGFloat = 16
 
-    /// One row for a short pane: ✕, the title, servings.
+    /// One row for a short pane: ✕, the title (up to two lines), and servings as − N +.
     private var shortHeader: some View {
         HStack(spacing: 10) {
             exitButton
             Text(recipe.title)
                 .font(Theme.title(20))
                 .foregroundStyle(Theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Spacer(minLength: 4)
-            servingsControl
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            servingsControl(short: true)
         }
     }
 
@@ -600,7 +600,7 @@ struct CookModeView: View {
                     Color.clear.frame(width: 0, height: 0)
                 }
                 Spacer(minLength: 4)
-                servingsControl
+                servingsControl()
             }
             Text(recipe.title)
                 .font(Theme.title(compact ? 24 : 32))
@@ -627,7 +627,8 @@ struct CookModeView: View {
     }
 
     /// A beige pill: white − and + circles around "N servings".
-    private var servingsControl: some View {
+    /// `short`: just the number between − and + (VoiceOver still reads "N servings").
+    private func servingsControl(short: Bool = false) -> some View {
         HStack(spacing: 6) {
             Button {
                 servings = max(1, servings - 1)
@@ -637,8 +638,9 @@ struct CookModeView: View {
             .accessibilityLabel("Fewer servings")
             .accessibilityIdentifier("servingsMinus")
 
-            Text("\(servings) servings")
+            Text(short ? "\(servings)" : "\(servings) servings")
                 .font(Theme.text(17, bold: true).monospacedDigit())
+                .accessibilityLabel("\(servings) servings")
                 .foregroundStyle(Theme.ink)
                 .fixedSize()
                 .accessibilityIdentifier("servingsLabel")
