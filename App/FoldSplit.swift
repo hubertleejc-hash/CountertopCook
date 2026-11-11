@@ -77,12 +77,18 @@ private struct HingeProbeView: UIViewRepresentable {
 struct FoldSplitView<Primary: View, Secondary: View>: UIViewControllerRepresentable {
     let primary: Primary
     let secondary: Secondary
+    /// Called when the hinge's direction is known or changes: true when it runs top to bottom
+    /// (panes side by side), false when it runs across (panes stacked, as on a tabletop).
+    var onHingeAxis: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> FoldSplitController {
-        FoldSplitController(primary: AnyView(primary), secondary: AnyView(secondary))
+        let controller = FoldSplitController(primary: AnyView(primary), secondary: AnyView(secondary))
+        controller.onHingeAxis = onHingeAxis
+        return controller
     }
 
     func updateUIViewController(_ controller: FoldSplitController, context: Context) {
+        controller.onHingeAxis = onHingeAxis
         controller.update(primary: AnyView(primary), secondary: AnyView(secondary))
     }
 }
@@ -93,6 +99,8 @@ final class FoldSplitController: UIViewController {
     private let primaryHost: UIHostingController<AnyView>
     private let secondaryHost: UIHostingController<AnyView>
     private let hingeView = HingeGapView()
+    var onHingeAxis: ((Bool) -> Void)?
+    private var reportedVertical: Bool?
     /// The recipe half's paler tone, laid over the warm root up to the hinge's centre line.
     private let recipeSide = UIView()
 
@@ -166,6 +174,11 @@ final class FoldSplitController: UIViewController {
             : region.frame.insetBy(dx: 0, dy: min(0, (region.frame.height - minimum) / 2))
         hingeView.isHidden = false
         hingeView.frame = hinge
+        if reportedVertical != vertical {
+            reportedVertical = vertical
+            let report = onHingeAxis
+            DispatchQueue.main.async { report?(vertical) }
+        }
         // Pale tone on the recipe's side of the hinge's centre line; the root is the warm tone.
         let recipe = primaryHost.view.convert(primaryHost.view.bounds, to: view)
         let (first, second) = vertical

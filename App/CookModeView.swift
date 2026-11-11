@@ -25,6 +25,8 @@ struct CookModeView: View {
     @State private var checked: Set<PersistentIdentifier> = []
     @State private var finished = false
     @State private var fold = FoldPosture.none
+    /// Which way the hinge runs while unfolded: true side by side, false stacked (tabletop).
+    @State private var hingeVertical = true
 
     /// Width of the empty strip kept between the two panes (where a hinge would be).
     static let hingeGap: CGFloat = 28
@@ -61,20 +63,31 @@ struct CookModeView: View {
         }
     }
 
-    /// The arrangement-view split, only while an iPhone Duo's hinge is open.
+    /// The arrangement-view split, only while an iPhone Duo's hinge is open. Side by side (open
+    /// flat landscape, or book) the recipe leads and the timers trail; stacked (open flat
+    /// portrait) the recipe is on top. Tabletop (half open, hinge across) puts what you look at
+    /// on top and what you touch, ingredients, Back / Next and timers, on the deck below.
     private var foldSplit: AnyView? {
         #if FOLD_APIS
         if #available(iOS 27.1, *), fold.isUnfolded {
             let margin: CGFloat = 8
+            let tabletop = fold == .partiallyOpen && !hingeVertical
             return AnyView(
                 FoldSplitView(
                     primary: GeometryReader { pane in
-                        recipePane(compact: pane.size.height < 500 || pane.size.width < 320, tight: true,
-                                   margin: margin)
+                        let compact = pane.size.height < 500 || pane.size.width < 320
+                        if tabletop {
+                            lookPane(compact: compact, margin: margin)
+                        } else {
+                            recipePane(compact: compact, tight: true, margin: margin)
+                        }
                     }
                     .environment(timers)
                     .environment(\.colorScheme, .light),
                     secondary: GeometryReader { pane in
+                        if tabletop {
+                            deckPane(compact: true, margin: margin)
+                        } else {
                         // Converter pinned at the bottom and one-line timer rows, so the whole
                         // CONVERT card fits in the unfolded Duo's short half.
                         TimersPane(compact: pane.size.height < 500 || pane.size.width < 320,
@@ -82,9 +95,11 @@ struct CookModeView: View {
                                    roomy: pane.size.height - 2 * margin >= Self.roomyPaneHeight,
                                    pinConverter: true,
                                    margin: margin)
+                        }
                     }
                     .environment(timers)
-                    .environment(\.colorScheme, .light)
+                    .environment(\.colorScheme, .light),
+                    onHingeAxis: { hingeVertical = $0 }
                 )
                 .ignoresSafeArea(.container)
             )
@@ -141,6 +156,64 @@ struct CookModeView: View {
         }
     }
 
+    // MARK: Tabletop panes
+
+    /// The top half on a tabletop: header, progress and the step, nothing to tap but ✕ and
+    /// servings.
+    private func lookPane(compact: Bool, margin: CGFloat) -> some View {
+        let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
+        return VStack(alignment: .leading, spacing: 8) {
+            header(compact: compact)
+            HStack(spacing: 12) {
+                Text("Step \(min(stepIndex + 1, steps.count)) of \(steps.count)")
+                    .font(.headline.weight(.regular))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize()
+                    .accessibilityIdentifier("stepProgressLabel")
+                StepProgressBar(value: Double(min(stepIndex + 1, max(steps.count, 1))) / Double(max(steps.count, 1)))
+                    .accessibilityIdentifier("stepProgress")
+            }
+            ScrollView {
+                Text(step?.text ?? "This recipe has no steps yet.")
+                    .font(Theme.step(compact: compact))
+                    .foregroundStyle(Theme.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("stepText")
+            }
+        }
+        .padding(.horizontal, compact ? 12 : 20)
+        .padding(.vertical, 12)
+        .padding(margin)
+        .overlay { if finished { finishedOverlay } }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("recipeCard")
+    }
+
+    /// The bottom half on a tabletop: ingredients and Back / Next on the left, timers on the right.
+    private func deckPane(compact: Bool, margin: CGFloat) -> some View {
+        let step = steps.isEmpty ? nil : steps[min(stepIndex, steps.count - 1)]
+        return HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let minutes = step?.timerMinutes, minutes > 0 {
+                            stepTimerButton(minutes: minutes)
+                        }
+                        ingredientChecklist(tight: true)
+                    }
+                }
+                navigationButtons(compact: true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            TimersPane(compact: true, dense: true, margin: 0)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(margin)
+    }
+
     // MARK: Recipe pane
 
     private var steps: [RecipeStep] { recipe.sortedSteps }
@@ -177,16 +250,7 @@ struct CookModeView: View {
                         .accessibilityIdentifier("stepText")
 
                     if let minutes = step?.timerMinutes, minutes > 0 {
-                        Button {
-                            timers.add(name: "Step \(stepIndex + 1)", minutes: minutes)
-                        } label: {
-                            Label("Start \(minutes) min timer", systemImage: "play.fill")
-                                .font(.title3.weight(.semibold))
-                                .padding(.horizontal, 22)
-                                .frame(minHeight: 52)
-                        }
-                        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
-                        .accessibilityIdentifier("startStepTimer")
+                        stepTimerButton(minutes: minutes)
                     }
 
                     ingredientChecklist(tight: tight)
@@ -210,6 +274,20 @@ struct CookModeView: View {
         .accessibilityIdentifier("recipeCard")
     }
 
+    /// The black "Start N min timer" pill.
+    private func stepTimerButton(minutes: Int) -> some View {
+        Button {
+            timers.add(name: "Step \(stepIndex + 1)", minutes: minutes)
+        } label: {
+            Label("Start \(minutes) min timer", systemImage: "play.fill")
+                .font(.title3.weight(.semibold))
+                .padding(.horizontal, 22)
+                .frame(minHeight: 52)
+        }
+        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+        .accessibilityIdentifier("startStepTimer")
+    }
+
     /// COOK MODE with servings on the right, then the recipe title (as in reference-design.png).
     private func header(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 8) {
@@ -224,15 +302,27 @@ struct CookModeView: View {
                 .buttonStyle(SoftButtonStyle(circle: true))
                 .accessibilityLabel("Exit Cook Mode")
                 .accessibilityIdentifier("exitCook")
-                SectionLabel(text: "Cook Mode")
+                // English first, the Italian second when the row has room for it.
+                ViewThatFits(in: .horizontal) {
+                    SectionLabel(text: "Cook Mode · La cucina")
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionLabel(text: "Cook Mode")
+                        SectionLabel(text: "La cucina", color: Theme.muted, font: .caption.weight(.semibold))
+                    }
+                    SectionLabel(text: "Cook Mode")
+                }
                 Spacer(minLength: 4)
                 servingsControl
             }
+            let cuisine = recipe.cuisineKind
             Text(recipe.title)
-                .font(Theme.title(compact ? 24 : 32))
+                .font(cuisine?.heading(compact ? 24 : 32) ?? Theme.title(compact ? 24 : 32))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
+            if let cuisine {
+                CuisineBadge(cuisine: cuisine, size: compact ? 12 : 13)
+            }
         }
     }
 
@@ -271,8 +361,10 @@ struct CookModeView: View {
     /// rows fit under a long step on the unfolded Duo.
     private func ingredientChecklist(tight: Bool) -> some View {
         VStack(alignment: .leading, spacing: tight ? 4 : 6) {
-            SectionLabel(text: servings == recipe.servings ? "Ingredients" : "Ingredients · scaled for \(servings)",
+            SectionLabel(text: servings == recipe.servings ? "Ingredients · Mise en place" : "Ingredients · for \(servings)",
                          color: Theme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .padding(.top, tight ? 0 : 4)
             ForEach(Array(recipe.sortedIngredients.enumerated()), id: \.element.id) { index, item in
                 let done = checked.contains(item.persistentModelID)
@@ -351,6 +443,9 @@ struct CookModeView: View {
                 .foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("finishedMessage")
+            Text("Buon appetito — bon appétit")
+                .font(.system(size: 20, design: .serif).italic())
+                .foregroundStyle(Theme.muted)
             Button {
                 dismiss()
             } label: {

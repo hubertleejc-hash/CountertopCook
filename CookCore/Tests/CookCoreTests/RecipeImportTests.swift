@@ -37,6 +37,19 @@ private func fixture(_ name: String) throws -> String {
         #expect(!everything.contains("MUST NOT BE IMPORTED"))
     }
 
+    @Test func cuisineComesFromRecipeCuisine() throws {
+        let html = """
+        <html><head><script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"Recipe","name":"Ratatouille","recipeCuisine":["French","Provençal"],
+         "recipeIngredient":["1 aubergine"],"recipeInstructions":[{"@type":"HowToStep","text":"Slice."}]}
+        </script></head><body></body></html>
+        """
+        let recipe = try RecipeImporter.parse(html: html, url: URL(string: "https://example.com/r"))
+        #expect(recipe.cuisine == "French")
+        let fixtureRecipe = try RecipeImporter.parse(html: try fixture("recipe.html"), url: nil)
+        #expect(fixtureRecipe.cuisine == nil)
+    }
+
     @Test func pageWithoutRecipeIsAnError() throws {
         #expect(throws: RecipeImportError.noRecipeData) {
             try RecipeImporter.parse(html: try fixture("no-recipe.html"), url: nil)

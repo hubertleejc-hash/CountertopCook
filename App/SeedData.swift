@@ -18,14 +18,28 @@ enum SeedData {
         var version = defaults.integer(forKey: versionKey)
         if version == 0 && defaults.bool(forKey: seededKey) { version = 1 }
         if force { version = 0 }
-        guard version < 2 else { return }
+        guard version < 3 else { return }
         defaults.set(true, forKey: seededKey)
-        defaults.set(2, forKey: versionKey)
+        defaults.set(3, forKey: versionKey)
 
         let base = Date(timeIntervalSince1970: 1_700_000_000)
         if version < 1 { seedFirstThree(context, base: base) }
         if version < 2 { seedSevenMore(context, base: base) }
+        tagCuisines(context)
         try? context.save()
+    }
+
+    /// The French and Italian starters, by title. Also tags starters from earlier versions.
+    static let cuisines: [String: Cuisine] = [
+        "Pan-Seared Steak": .french, "Lemon Herb Chicken Thighs": .french,
+        "Garlic Butter Pasta": .italian, "Easy Tomato Soup": .italian,
+    ]
+
+    private static func tagCuisines(_ context: ModelContext) {
+        let all = (try? context.fetch(FetchDescriptor<Recipe>())) ?? []
+        for recipe in all where recipe.cuisine == nil {
+            if let cuisine = cuisines[recipe.title] { recipe.cuisine = cuisine.rawValue }
+        }
     }
 
     private static func seedFirstThree(_ context: ModelContext, base: Date) {

@@ -59,6 +59,7 @@ enum LinkImport {
                             totalMinutes: imported.totalMinutes ?? 0)
         recipe.sourceURL = url.absoluteString
         recipe.sourceName = imported.siteName
+        recipe.cuisine = Cuisine.from(tag: imported.cuisine)?.rawValue
         context.insert(recipe)
         recipe.ingredients = imported.ingredients.enumerated().map { index, item in
             Ingredient(amountText: item.amount, unit: item.unit, name: item.name, order: index)

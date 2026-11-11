@@ -11,6 +11,8 @@ final class Recipe {
     /// typed in or shipped with the app.
     var sourceURL: String?
     var sourceName: String?
+    /// "french" or "italian" for a recipe with that accent; nil for none.
+    var cuisine: String?
     @Relationship(deleteRule: .cascade, inverse: \Ingredient.recipe) var ingredients: [Ingredient] = []
     @Relationship(deleteRule: .cascade, inverse: \RecipeStep.recipe) var steps: [RecipeStep] = []
 
@@ -21,6 +23,7 @@ final class Recipe {
         self.createdAt = createdAt
     }
 
+    var cuisineKind: Cuisine? { Cuisine.from(tag: cuisine) }
     var sortedIngredients: [Ingredient] { ingredients.sorted { $0.order < $1.order } }
     var sortedSteps: [RecipeStep] { steps.sorted { $0.order < $1.order } }
 }

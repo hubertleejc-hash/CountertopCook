@@ -21,6 +21,8 @@ public struct ImportedRecipe: Equatable {
     public var steps: [String]
     /// The site's own name (og:site_name, the WebSite or publisher name), else the host name.
     public var siteName: String
+    /// recipeCuisine, as published ("French", "Italian", …); nil when the page gives none.
+    public var cuisine: String?
 }
 
 public enum RecipeImportError: Error, Equatable, LocalizedError {
@@ -62,7 +64,8 @@ public enum RecipeImporter {
             totalMinutes: total ?? (parts.isEmpty ? nil : parts.reduce(0, +)),
             ingredients: ingredients,
             steps: steps,
-            siteName: siteName(html: html, blocks: blocks, recipe: recipe, url: url))
+            siteName: siteName(html: html, blocks: blocks, recipe: recipe, url: url),
+            cuisine: strings(recipe["recipeCuisine"]).map(clean).first { !$0.isEmpty })
     }
 
     // MARK: JSON-LD

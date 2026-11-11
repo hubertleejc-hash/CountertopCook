@@ -23,7 +23,9 @@ struct TimersPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: dense ? 6 : (compact ? 8 : 12)) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Timers")
+                SectionLabel(text: "Timers · Minuteurs")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .accessibilityIdentifier("timersHeader")
                 Spacer()
                 if !store.timers.isEmpty {

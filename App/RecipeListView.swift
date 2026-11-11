@@ -17,10 +17,13 @@ struct RecipeListView: View {
                 ForEach(recipes) { recipe in
                     NavigationLink(value: recipe) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(recipe.title).font(.headline)
+                            Text(recipe.title).font(recipe.cuisineKind?.heading(17) ?? .headline)
                             Text("\(recipe.servings) servings · \(formatMinutes(recipe.totalMinutes)) · \(recipe.steps.count) steps")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                            if let cuisine = recipe.cuisineKind {
+                                CuisineBadge(cuisine: cuisine, size: 12)
+                            }
                         }
                         .padding(.vertical, 4)
                     }
@@ -133,6 +136,11 @@ struct RecipeDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .listRowInsets(EdgeInsets())
                 .accessibilityIdentifier("startCooking")
+            }
+            if let cuisine = recipe.cuisineKind {
+                Section {
+                    CuisineBadge(cuisine: cuisine, size: 15)
+                }
             }
             if let source = recipe.sourceURL, let url = URL(string: source) {
                 Section {
