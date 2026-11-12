@@ -13,6 +13,7 @@ struct CountertopCookApp: App {
         let config = ModelConfiguration(isStoredInMemoryOnly: isUITesting, cloudKitDatabase: .none)
         do {
             container = try ModelContainer(for: Recipe.self, Ingredient.self, RecipeStep.self, ShoppingItem.self,
+                                           RecipePhoto.self,
                                            configurations: config)
         } catch {
             fatalError("Could not open the recipe store: \(error)")
@@ -29,10 +30,13 @@ struct CountertopCookApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RecipeListView()
+            RootView()
                 .environment(timers)
                 // Burnt orange instead of system blue for every button, toggle and link.
                 .tint(Theme.accent)
+                // The palette is fixed (dark-brown ink on cream), so the app stays light when
+                // the phone is in Dark Mode. Info.plist says the same for system-drawn parts.
+                .preferredColorScheme(.light)
         }
         .modelContainer(container)
     }

@@ -27,10 +27,7 @@ final class CountertopCookUITests: XCTestCase {
 
     func testAddRecipeCookThroughAllStepsAndFinish() {
         // Typing a recipe in is the fallback, under the + menu.
-        let menu = element("addMenu")
-        (menu.waitForExistence(timeout: 5) ? menu : app.buttons["Add Recipe"].firstMatch).tap()
-        let manual = element("addRecipe")
-        (manual.waitForExistence(timeout: 3) ? manual : app.buttons["Type it in by hand"].firstMatch).tap()
+        chooseAdd("addRecipe", titled: "Type it in by hand")
         type("Test Toast", into: "recipeTitle")
         type("1 1/2", into: "ingredientAmount_0")
         type("slice", into: "ingredientUnit_0")
@@ -61,6 +58,48 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5), "Should return to the recipe")
     }
 
+    // MARK: Startup page, then the shelf of books
+
+    func testStartupPageThenLibrary() {
+        app.terminate()
+        app.launchArguments = ["-uitesting", "-splash"]
+        app.launch()
+        let splash = element("splash")
+        XCTAssertTrue(splash.waitForExistence(timeout: 5), "No startup page")
+        XCTAssertEqual(splash.label, "Hearth")
+        snapshot("startup")
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: splash)
+        wait(for: [gone], timeout: 15)
+        XCTAssertTrue(app.navigationBars["Recipes"].exists, "The library didn't follow the startup page")
+        // The name and mark live on the startup page now, not in the library.
+        XCTAssertFalse(element("libraryHeader").exists, "The Hearth banner is still in the library")
+        XCTAssertEqual(element("libraryCount").label, "10 recipes")
+        findRow("Pan-Seared Steak")
+        findRow("Garlic Butter Pasta")
+        snapshot("library-shelf")
+    }
+
+    // MARK: A recipe opens as a book and keeps the cook's own notes
+
+    func testRecipeOpensAsBookAndKeepsNotes() {
+        findRow("Pan-Seared Steak").tap()
+        let title = element("recipeTitleHeader")
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "The recipe's book didn't open")
+        XCTAssertEqual(title.label, "Pan-Seared Steak")
+        XCTAssertEqual(element("recipeFacts").label, "2 servings · 25 min")
+        XCTAssertTrue(element("addPhoto").exists, "No way to add a photo")
+        XCTAssertTrue(element("startCooking").isHittable, "Start Cooking isn't on the first page")
+        snapshot("recipe-book")
+
+        scrollTo("recipeNotes")
+        type("Mum likes it medium.", into: "recipeNotes")
+        hideKeyboard()
+        snapshot("recipe-notes")
+        goBackToLibrary()
+        findRow("Pan-Seared Steak").tap()
+        XCTAssertEqual(scrollTo("recipeNotes").value as? String, "Mum likes it medium.", "The note wasn't kept")
+    }
+
     // MARK: Recipe sources: ten starters on first launch, deletable
 
     func testTenStarterRecipesAndDelete() {
@@ -71,10 +110,11 @@ final class CountertopCookUITests: XCTestCase {
         for title in starters { findRow(title) }
         snapshot("library-starters")
 
+        // Books are deleted from the menu that a long press opens.
         let victim = findRow("One-Pot Bean Chili")
-        victim.swipeLeft()
+        victim.press(forDuration: 1.2)
         let delete = app.buttons["Delete"].firstMatch
-        XCTAssertTrue(delete.waitForExistence(timeout: 5), "No Delete button after swiping the row")
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "No Delete in the book's long-press menu")
         delete.tap()
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: victim)
         wait(for: [gone], timeout: 5)
@@ -86,7 +126,7 @@ final class CountertopCookUITests: XCTestCase {
     func testImportFromLink() throws {
         let base = try XCTUnwrap(ProcessInfo.processInfo.environment["IMPORT_FIXTURE_URL"],
                                  "IMPORT_FIXTURE_URL is not set: ci/run-ui-tests.sh serves ci/fixtures for this test")
-        scrollLibraryToTop()
+        chooseAdd("menuImportLink", titled: "Import from a link")
         type("\(base)/recipe.html", into: "importLink")
         element("importButton").tap()
 
@@ -149,7 +189,7 @@ final class CountertopCookUITests: XCTestCase {
         goBackToLibrary()
 
         // A page with no recipe card: a clear error, no review screen, and nothing is added.
-        scrollLibraryToTop()
+        chooseAdd("menuImportLink", titled: "Import from a link")
         type("\(base)/no-recipe.html", into: "importLink")
         element("importButton").tap()
         let error = element("importError")
@@ -163,8 +203,7 @@ final class CountertopCookUITests: XCTestCase {
     // MARK: Import from pasted text: review screen, nothing invented, auto-timers
 
     func testPastedTextIsReviewedBeforeSaving() {
-        scrollLibraryToTop()
-        element("pasteTextButton").tap()
+        chooseAdd("menuPasteText", titled: "Paste recipe text")
         let editor = element("pasteTextEditor")
         XCTAssertTrue(editor.waitForExistence(timeout: 5), "Paste screen didn't open")
         editor.tap()
@@ -311,14 +350,14 @@ final class CountertopCookUITests: XCTestCase {
     func testServingsRescaleIngredients() {
         openCookMode("Garlic Butter Pasta")
         XCTAssertTrue(element("ingredient_0").label.contains("200 g spaghetti"), element("ingredient_0").label)
-        XCTAssertTrue(element("ingredient_1").label.contains("1 1/2 cup grated parmesan"), element("ingredient_1").label)
+        XCTAssertTrue(element("ingredient_1").label.contains("1/2 cup grated parmesan"), element("ingredient_1").label)
 
         element("servingsPlus").tap()
         let three = expectation(for: NSPredicate(format: "label BEGINSWITH '3'"), evaluatedWith: element("servingsLabel"))
         wait(for: [three], timeout: 5)
         XCTAssertTrue(element("servingsLabel").label.hasPrefix("3"), element("servingsLabel").label)
         XCTAssertTrue(element("ingredient_0").label.contains("300 g spaghetti"), element("ingredient_0").label)
-        XCTAssertTrue(element("ingredient_1").label.contains("2 1/4 cup grated parmesan"), element("ingredient_1").label)
+        XCTAssertTrue(element("ingredient_1").label.contains("3/4 cup grated parmesan"), element("ingredient_1").label)
         XCTAssertTrue(element("ingredient_5").label.contains("salt, to taste"), element("ingredient_5").label)
 
         element("ingredient_0").tap()
@@ -490,8 +529,7 @@ final class CountertopCookUITests: XCTestCase {
         app.terminate()
         app.launchEnvironment["COOK_POSE"] = "openPortrait"
         app.launch()
-        scrollLibraryToTop()
-        element("pasteTextButton").tap()
+        chooseAdd("menuPasteText", titled: "Paste recipe text")
         let editor = element("pasteTextEditor")
         XCTAssertTrue(editor.waitForExistence(timeout: 5), "Paste screen didn't open")
         editor.tap()
@@ -745,9 +783,17 @@ final class CountertopCookUITests: XCTestCase {
     }
 
     private func scrollLibraryToTop() {
-        for _ in 0..<12 where !element("importLink").isHittable {
+        for _ in 0..<12 where !element("librarySearch").isHittable {
             app.swipeDown()
         }
+    }
+
+    /// Opens the library's + menu and picks one way of adding a recipe.
+    private func chooseAdd(_ id: String, titled title: String) {
+        let menu = element("addMenu")
+        (menu.waitForExistence(timeout: 5) ? menu : app.buttons["Add Recipe"].firstMatch).tap()
+        let item = element(id)
+        (item.waitForExistence(timeout: 3) ? item : app.buttons[title].firstMatch).tap()
     }
 
     private func openCookMode(_ title: String) {

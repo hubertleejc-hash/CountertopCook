@@ -45,6 +45,9 @@ final class Recipe {
     /// A `RecipeCategory` raw value: "Food", "Drinks" or "Desserts".
     var category: String = "Food"
     var isFavorite: Bool = false
+    /// The cook's own notes: what they changed, who they made it for.
+    var notes: String = ""
+    @Relationship(deleteRule: .cascade, inverse: \RecipePhoto.recipe) var photos: [RecipePhoto] = []
     @Relationship(deleteRule: .cascade, inverse: \Ingredient.recipe) var ingredients: [Ingredient] = []
     @Relationship(deleteRule: .cascade, inverse: \RecipeStep.recipe) var steps: [RecipeStep] = []
 
@@ -59,6 +62,21 @@ final class Recipe {
     var categoryKind: RecipeCategory { RecipeCategory(rawValue: category) ?? .food }
     var sortedIngredients: [Ingredient] { ingredients.sorted { $0.order < $1.order } }
     var sortedSteps: [RecipeStep] { steps.sorted { $0.order < $1.order } }
+    /// In the order they were added; the first is the cover of the recipe's book.
+    var sortedPhotos: [RecipePhoto] { photos.sorted { $0.order < $1.order } }
+}
+
+/// One photo of a recipe, stored as a JPEG no larger than `PhotoStore.maxPixel` on its long side.
+@Model
+final class RecipePhoto {
+    @Attribute(.externalStorage) var data: Data
+    var order: Int
+    var recipe: Recipe?
+
+    init(data: Data, order: Int) {
+        self.data = data
+        self.order = order
+    }
 }
 
 @Model

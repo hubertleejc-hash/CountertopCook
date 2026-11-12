@@ -12,6 +12,8 @@ enum Theme {
     static let recipeSideUI = UIColor(hex: 0xFAF8F3)
     static let timersSideUI = UIColor(hex: 0xF4EFE4)
     static let card = Color(hex: 0xFFFFFF)
+    /// The pages of a recipe's book: warm white paper.
+    static let paper = Color(hex: 0xFFFDF8)
     static let beige = Color(hex: 0xEFE7D6)
     /// Main text: dark brown.
     static let ink = Color(hex: 0x221C15)

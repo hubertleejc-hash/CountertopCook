@@ -2,17 +2,14 @@ import SwiftUI
 import SwiftData
 import CookCore
 
-/// The library: every saved recipe, with import at the top (a link, pasted text, or a share
-/// from another app), then search, the Food / Drinks / Desserts shelves, favourites and sorting.
-/// Typing a recipe in by hand is still there, under +, as the fallback.
+/// The library: a shelf of books, one per saved recipe. Search, the Food / Drinks / Desserts
+/// shelves, favourites and sorting sit above it; adding a recipe (from a link, pasted text, or
+/// typed in by hand) is under +. A share from another app arrives here too.
 struct RecipeListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Recipe.createdAt) private var recipes: [Recipe]
     @Query private var shopping: [ShoppingItem]
     @State private var path: [Recipe] = []
-    @State private var link = ""
-    @State private var importing = false
-    @State private var importError: String?
     @State private var sheet: LibrarySheet?
     @State private var showingToBuy = false
     @State private var search = ""
@@ -27,14 +24,15 @@ struct RecipeListView: View {
 
     enum LibrarySheet: Identifiable {
         case manual
+        /// Import from a link; `start` fetches it straight away (a share from another app).
+        case link(String, start: Bool)
         case paste(String)
-        case review(RecipeDraft)
 
         var id: String {
             switch self {
             case .manual: return "manual"
+            case .link(let link, _): return "link-\(link)"
             case .paste: return "paste"
-            case .review: return "review"
             }
         }
     }
@@ -61,62 +59,43 @@ struct RecipeListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                Section {
-                    HStack(spacing: 14) {
-                        HearthLogo().frame(width: 52, height: 52)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hearth").font(Theme.body(24, bold: true, relativeTo: .title2))
-                            Text("Recipes, timers and your to-buy list")
-                                .font(Theme.body(14, relativeTo: .footnote))
-                                .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    searchField
+                    filterChips
+                    HStack {
+                        Text(shown.count == 1 ? "1 recipe" : "\(shown.count) recipes")
+                            .font(Theme.body(14, relativeTo: .footnote))
+                            .foregroundStyle(Theme.muted)
+                            .accessibilityIdentifier("libraryCount")
+                        Spacer()
+                        Picker("Sort", selection: $sort) {
+                            ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
                         }
-                    }
-                    .padding(.vertical, 2)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("libraryHeader")
-                }
-                importSection
-                filterSection
-                Section {
-                    ForEach(shown) { recipe in
-                        NavigationLink(value: recipe) {
-                            RecipeRow(recipe: recipe)
-                        }
-                        .accessibilityIdentifier("recipeRow_\(recipe.title)")
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                recipe.isFavorite.toggle()
-                                try? context.save()
-                            } label: {
-                                Label(recipe.isFavorite ? "Unfavourite" : "Favourite",
-                                      systemImage: recipe.isFavorite ? "heart.slash" : "heart")
-                            }
-                            .tint(Theme.accent)
-                        }
-                    }
-                    .onDelete { offsets in
-                        let list = shown
-                        offsets.map { list[$0] }.forEach(context.delete)
-                        try? context.save()
+                        .pickerStyle(.menu)
+                        .tint(Theme.navy)
+                        .accessibilityIdentifier("sortPicker")
                     }
                     if shown.isEmpty {
-                        Text(recipes.isEmpty ? "No recipes yet. Import one above, or tap + to type one in."
+                        Text(recipes.isEmpty ? "No recipes yet. Tap + to import one or type one in."
                                              : "No recipes match. Clear the search or the filters.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 40)
                             .accessibilityIdentifier("libraryEmpty")
+                    } else {
+                        shelf
                     }
-                } header: {
-                    Text(shown.count == 1 ? "1 recipe" : "\(shown.count) recipes")
-                        .accessibilityIdentifier("libraryCount")
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
-            .warmList()
+            .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Recipes")
             .navigationDestination(for: Recipe.self) { RecipeDetailView(recipe: $0) }
             .navigationDestination(isPresented: $showingToBuy) { ShoppingListView() }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         showingToBuy = true
@@ -125,6 +104,12 @@ struct RecipeListView: View {
                     }
                     .accessibilityIdentifier("openToBuy")
                     Menu {
+                        Button {
+                            sheet = .link("", start: false)
+                        } label: {
+                            Label("Import from a link", systemImage: "link")
+                        }
+                        .accessibilityIdentifier("menuImportLink")
                         Button {
                             sheet = .paste("")
                         } label: {
@@ -147,10 +132,10 @@ struct RecipeListView: View {
                 switch sheet {
                 case .manual:
                     RecipeEditorView(recipe: nil)
+                case .link(let link, let start):
+                    ImportLinkView(initialLink: link, startNow: start) { open($0) }
                 case .paste(let text):
                     PasteTextView(initialText: text) { open($0) }
-                case .review(let draft):
-                    RecipeEditorView(review: draft) { open($0) }
                 }
             }
         }
@@ -162,94 +147,79 @@ struct RecipeListView: View {
         path.append(recipe)
     }
 
-    /// Paste a recipe page's link or a YouTube link; or paste the recipe's text.
-    private var importSection: some View {
-        Section {
-            HStack(spacing: 8) {
-                TextField("Paste a recipe or YouTube link", text: $link)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.go)
-                    .onSubmit(startImport)
-                    .disabled(importing)
-                    .accessibilityIdentifier("importLink")
-                if importing {
-                    ProgressView().accessibilityIdentifier("importProgress")
-                } else {
-                    Button("Import", action: startImport)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityIdentifier("importButton")
+    /// The books, as many across as fit: two on a phone, more on an iPad or an open Duo.
+    private var shelf: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 230), spacing: 18, alignment: .top)],
+                  spacing: 22) {
+            ForEach(shown) { recipe in
+                NavigationLink(value: recipe) {
+                    BookCover(recipe: recipe)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipeRow_\(recipe.title)")
+                .contextMenu {
+                    Button {
+                        recipe.isFavorite.toggle()
+                        try? context.save()
+                    } label: {
+                        Label(recipe.isFavorite ? "Unfavourite" : "Favourite",
+                              systemImage: recipe.isFavorite ? "heart.slash" : "heart")
+                    }
+                    Button(role: .destructive) {
+                        context.delete(recipe)
+                        try? context.save()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
-            Button {
-                sheet = .paste("")
-            } label: {
-                Label("Paste recipe text", systemImage: "doc.on.clipboard")
-                    .foregroundStyle(Theme.navy)
-            }
-            .accessibilityIdentifier("pasteTextButton")
-            if let importError {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").accessibilityHidden(true)
-                    Text(importError)
-                }
-                .font(Theme.body(13, relativeTo: .footnote))
-                .foregroundStyle(.red)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("importError")
-            }
-        } header: {
-            Text("Import")
-        } footer: {
-            Text("You review every import before it is saved. From YouTube or any other app, use Share and choose Hearth.")
         }
     }
 
-    private var filterSection: some View {
-        Section {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                TextField("Search recipes or ingredients", text: $search)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("librarySearch")
-                if !search.isEmpty {
-                    Button {
-                        search = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Clear search")
-                    .accessibilityIdentifier("librarySearchClear")
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted).accessibilityHidden(true)
+            TextField("Search recipes or ingredients", text: $search)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("librarySearch")
+            if !search.isEmpty {
+                Button {
+                    search = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
                 }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("librarySearchClear")
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    filterChip("All", selected: category == nil && !favouritesOnly, id: "category_All") {
-                        category = nil
-                        favouritesOnly = false
-                    }
-                    ForEach(RecipeCategory.allCases) { item in
-                        filterChip(item.rawValue, symbol: item.symbol, selected: category == item, id: "category_\(item.rawValue)") {
-                            category = category == item ? nil : item
-                        }
-                    }
-                    filterChip("Favourites", symbol: favouritesOnly ? "heart.fill" : "heart", selected: favouritesOnly,
-                               id: "favouritesFilter") {
-                        favouritesOnly.toggle()
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 0))
-            Picker("Sort", selection: $sort) {
-                ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .accessibilityIdentifier("sortPicker")
         }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 44)
+        .background(Theme.card, in: Capsule())
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip("All", selected: category == nil && !favouritesOnly, id: "category_All") {
+                    category = nil
+                    favouritesOnly = false
+                }
+                ForEach(RecipeCategory.allCases) { item in
+                    filterChip(item.rawValue, symbol: item.symbol, selected: category == item, id: "category_\(item.rawValue)") {
+                        category = category == item ? nil : item
+                    }
+                }
+                filterChip("Favourites", symbol: favouritesOnly ? "heart.fill" : "heart", selected: favouritesOnly,
+                           id: "favouritesFilter") {
+                    favouritesOnly.toggle()
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        // The chips scroll edge to edge, past the page margin.
+        .padding(.horizontal, -20)
     }
 
     private func filterChip(_ title: String, symbol: String? = nil, selected: Bool, id: String,
@@ -269,35 +239,17 @@ struct RecipeListView: View {
         .accessibilityIdentifier(id)
     }
 
-    private func startImport() {
-        guard !importing, !link.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        importing = true
-        importError = nil
-        Task {
-            do {
-                let draft = try await LinkImport.draft(from: link)
-                link = ""
-                sheet = .review(draft)
-            } catch {
-                importError = error.localizedDescription
-            }
-            importing = false
-        }
-    }
-
     /// A share from another app: hearth://import?url=… or ?text=… (see ShareExtension).
     private func handleIncoming(_ url: URL) {
         guard url.scheme == "hearth", let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return }
         path = []
         if let address = items.first(where: { $0.name == "url" })?.value, !address.isEmpty {
-            link = address
-            startImport()
+            sheet = .link(address, start: true)
         } else if let text = items.first(where: { $0.name == "text" })?.value, !text.isEmpty {
             // Shared text that is really a link ("Watch this https://youtu.be/…") is fetched;
             // anything else goes to the paste screen, ready to read.
             if text.count < 400, text.range(of: #"https?://\S+"#, options: .regularExpression) != nil {
-                link = text
-                startImport()
+                sheet = .link(text, start: true)
             } else {
                 sheet = .paste(text)
             }
@@ -305,35 +257,180 @@ struct RecipeListView: View {
     }
 }
 
-/// One recipe in the library: title in Lora, then servings, time and steps, with the heart and
-/// the cuisine accent when it has them.
-private struct RecipeRow: View {
+/// One recipe on the shelf, as a book: its first photo for a cover, or a plain cloth cover in
+/// the shelf's colour, with the title in Lora, a spine down the left and the cuisine's ribbon.
+struct BookCover: View {
     let recipe: Recipe
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(recipe.title).font(Theme.title(18))
-                if recipe.isFavorite {
-                    Image(systemName: "heart.fill").font(.footnote).foregroundStyle(Theme.accent)
-                        .accessibilityLabel("Favourite")
-                }
-            }
-            Text(summary)
-                .font(Theme.body(15, relativeTo: .subheadline))
-                .foregroundStyle(.secondary)
-            if let cuisine = recipe.cuisineKind {
-                CuisineBadge(cuisine: cuisine, size: 12)
-            }
+    /// Cloth colours for books without a photo: navy for food, deep green for drinks, brick for
+    /// desserts. All dark enough for white type.
+    private var cloth: Color {
+        switch recipe.categoryKind {
+        case .food: return Theme.navy
+        case .drinks: return Color(hex: 0x2F5D50)
+        case .desserts: return Color(hex: 0x8C3B2A)
         }
-        .padding(.vertical, 4)
     }
 
     private var summary: String {
-        var parts = [recipe.categoryKind.rawValue, "\(recipe.servings) servings"]
+        var parts: [String] = []
         if recipe.totalMinutes > 0 { parts.append(formatMinutes(recipe.totalMinutes)) }
-        parts.append("\(recipe.steps.count) steps")
+        parts.append(recipe.steps.count == 1 ? "1 step" : "\(recipe.steps.count) steps")
         return parts.joined(separator: " · ")
+    }
+
+    private var shape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: 3, bottomLeadingRadius: 3, bottomTrailingRadius: 10, topTrailingRadius: 10)
+    }
+
+    var body: some View {
+        cloth
+            .aspectRatio(3 / 4, contentMode: .fit)
+            .overlay {
+                if let photo = recipe.sortedPhotos.first {
+                    PhotoImage(photo: photo, maxPixel: 700)
+                    // Darkens the foot of the photo so the title reads on any picture.
+                    LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .center, endPoint: .bottom)
+                } else {
+                    Image(systemName: recipe.categoryKind.symbol)
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(.white.opacity(0.22))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(14)
+                        .accessibilityHidden(true)
+                    shape.inset(by: 7).stroke(.white.opacity(0.28), lineWidth: 1)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let cuisine = recipe.cuisineKind {
+                        TricoloreStrip(cuisine: cuisine, width: 34, height: 4)
+                    }
+                    Text(recipe.title)
+                        .font(Theme.title(19))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.8)
+                    Text(summary)
+                        .font(Theme.text(12))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .padding(.leading, 24)
+                .padding(.trailing, 14)
+                .padding(.bottom, 16)
+            }
+            .overlay(alignment: .topLeading) {
+                if recipe.isFavorite {
+                    Image(systemName: "heart.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                        .padding(.leading, 24)
+                        .padding(.top, 16)
+                        .accessibilityLabel("Favourite")
+                }
+            }
+            // The spine: a shaded strip down the bound edge.
+            .overlay(alignment: .leading) {
+                LinearGradient(colors: [.black.opacity(0.34), .black.opacity(0.06), .clear],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 14)
+                    .accessibilityHidden(true)
+            }
+            .clipShape(shape)
+            .shadow(color: Theme.ink.opacity(0.24), radius: 6, x: 2, y: 4)
+            .accessibilityElement(children: .combine)
+    }
+}
+
+/// Import from a link: a recipe page or a YouTube video. The review screen opens in this sheet.
+struct ImportLinkView: View {
+    let startNow: Bool
+    let onSaved: (Recipe) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var link: String
+    @State private var importing = false
+    @State private var importError: String?
+    @State private var draft: RecipeDraft?
+
+    init(initialLink: String, startNow: Bool, onSaved: @escaping (Recipe) -> Void) {
+        self.startNow = startNow
+        self.onSaved = onSaved
+        _link = State(initialValue: initialLink)
+    }
+
+    var body: some View {
+        if let draft {
+            RecipeEditorView(review: draft, onSaved: onSaved)
+        } else {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("Paste a recipe or YouTube link", text: $link)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .onSubmit(startImport)
+                            .disabled(importing)
+                            .accessibilityIdentifier("importLink")
+                        if let importError {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill").accessibilityHidden(true)
+                                Text(importError)
+                            }
+                            .font(Theme.body(13, relativeTo: .footnote))
+                            .foregroundStyle(.red)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("importError")
+                        }
+                    } header: {
+                        Text("Link")
+                    } footer: {
+                        Text("You review every import before it is saved. From YouTube or any other app, you can also use Share and choose Hearth.")
+                    }
+                    Section {
+                        Button(action: startImport) {
+                            HStack(spacing: 8) {
+                                if importing { ProgressView().accessibilityIdentifier("importProgress") }
+                                Text(importing ? "Reading…" : "Import").font(Theme.body(17, bold: true))
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(importing || link.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .listRowInsets(EdgeInsets())
+                        .accessibilityIdentifier("importButton")
+                    }
+                }
+                .warmList()
+                .navigationTitle("Import Link")
+                .navigationBarTitleDisplayMode(.inline)
+                .font(Theme.body())
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+            }
+            .task {
+                if startNow { startImport() }
+            }
+        }
+    }
+
+    private func startImport() {
+        guard !importing, !link.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        importing = true
+        importError = nil
+        Task {
+            do {
+                draft = try await LinkImport.draft(from: link)
+            } catch {
+                importError = error.localizedDescription
+            }
+            importing = false
+        }
     }
 }
 
@@ -405,120 +502,4 @@ func formatMinutes(_ minutes: Int) -> String {
     if minutes < 60 { return "\(minutes) min" }
     let h = minutes / 60, m = minutes % 60
     return m == 0 ? "\(h) h" : "\(h) h \(m) min"
-}
-
-struct RecipeDetailView: View {
-    @Bindable var recipe: Recipe
-    @Environment(\.modelContext) private var context
-    @State private var editing = false
-    @State private var cooking = false
-    @State private var pickingToBuy = false
-
-    var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(recipe.title)
-                        .font(Theme.title(28))
-                        .accessibilityIdentifier("recipeTitleHeader")
-                    HStack(spacing: 10) {
-                        Label(recipe.categoryKind.rawValue, systemImage: recipe.categoryKind.symbol)
-                            .font(Theme.body(15, relativeTo: .subheadline))
-                            .foregroundStyle(.secondary)
-                        if let cuisine = recipe.cuisineKind {
-                            CuisineBadge(cuisine: cuisine, size: 14)
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            Section {
-                Button {
-                    cooking = true
-                } label: {
-                    Label("Start Cooking", systemImage: "frying.pan")
-                        .font(Theme.body(20, bold: true, relativeTo: .title3))
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                }
-                .buttonStyle(.borderedProminent)
-                .listRowInsets(EdgeInsets())
-                .accessibilityIdentifier("startCooking")
-            }
-            Section {
-                Button {
-                    pickingToBuy = true
-                } label: {
-                    Label("Add to the to-buy list", systemImage: "cart.badge.plus")
-                        .foregroundStyle(Theme.navy)
-                }
-                .disabled(recipe.ingredients.isEmpty)
-                .accessibilityIdentifier("addToBuy")
-            }
-            if let source = recipe.sourceURL, let url = URL(string: source) {
-                Section {
-                    Link(destination: url) {
-                        Label("Source: \(recipe.sourceName ?? url.host ?? source)", systemImage: "link")
-                            .foregroundStyle(Theme.navy)
-                    }
-                    .accessibilityIdentifier("recipeSource")
-                }
-            } else if let source = recipe.sourceName, !source.isEmpty {
-                Section {
-                    Label("Source: \(source)", systemImage: "doc.text")
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Source: \(source)")
-                        .accessibilityIdentifier("recipeSource")
-                }
-            }
-            Section {
-                LabeledContent("Servings", value: "\(recipe.servings)")
-                LabeledContent("Total time", value: recipe.totalMinutes > 0 ? formatMinutes(recipe.totalMinutes) : "Not given")
-            }
-            Section("Ingredients") {
-                ForEach(recipe.sortedIngredients) { item in
-                    (Text(ingredientAmount(item, servingsFrom: recipe.servings, to: recipe.servings)).font(Theme.body(17, bold: true).monospacedDigit())
-                     + Text(ingredientRest(item)))
-                }
-            }
-            Section("Steps") {
-                ForEach(Array(recipe.sortedSteps.enumerated()), id: \.element.id) { index, step in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(index + 1). \(step.text)")
-                        if let minutes = step.timerMinutes, minutes > 0 {
-                            Label("\(minutes) min timer", systemImage: "timer")
-                                .font(Theme.body(12, relativeTo: .caption))
-                                .foregroundStyle(.secondary)
-                                .accessibilityIdentifier("stepTimerLabel_\(index)")
-                        }
-                    }
-                }
-            }
-        }
-        .font(Theme.body())
-        .warmList()
-        .navigationTitle(recipe.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            Button {
-                recipe.isFavorite.toggle()
-                try? context.save()
-            } label: {
-                Label(recipe.isFavorite ? "Remove from favourites" : "Add to favourites",
-                      systemImage: recipe.isFavorite ? "heart.fill" : "heart")
-            }
-            .accessibilityValue(recipe.isFavorite ? "favourite" : "not favourite")
-            .accessibilityIdentifier("favouriteToggle")
-            Button("Edit") { editing = true }
-                .accessibilityIdentifier("editRecipe")
-        }
-        .sheet(isPresented: $editing) {
-            RecipeEditorView(recipe: recipe)
-        }
-        .sheet(isPresented: $pickingToBuy) {
-            ToBuyPickerView(recipe: recipe)
-        }
-        .fullScreenCover(isPresented: $cooking) {
-            CookModeView(recipe: recipe)
-        }
-    }
 }

@@ -5,10 +5,16 @@ Local only: no account, no server, no AI. All text is English.
 
 ## What it does
 
-- **Library.** Save many recipes on three shelves (Food, Drinks, Desserts), with favourites,
-  search and sorting. Ten starter recipes ship with the app and can be deleted.
+- **Startup page.** The Hearth mark and name for a moment, then the library.
+- **Library.** A shelf of books, one per recipe, on three shelves (Food, Drinks, Desserts), with
+  favourites, search and sorting. A book's cover is the recipe's first photo, or a plain cloth
+  cover. Long-press a book to favourite or delete it. Ten starter recipes ship with the app.
+- **A recipe opens like a book.** Paper pages for the cover and photos, the ingredients, the
+  method and **My notes**, the cook's own page. Two pages side by side on a wide screen.
+  Photos come from the photo library and are stored with the recipe.
+- **Always light.** The palette is fixed, so the app ignores the phone's Dark Mode.
 - **Import from anywhere, reviewed before saving.**
-  - A recipe page's link: only its schema.org Recipe data is read, never the story text.
+  - **+ → Import from a link.** A recipe page's link: only its schema.org Recipe data is read, never the story text.
   - A YouTube link, or Share → Hearth from the YouTube app: the video's title and description
     (and captions, when YouTube serves them).
   - Pasted text: an Ingredients list and a Method / Instructions list.

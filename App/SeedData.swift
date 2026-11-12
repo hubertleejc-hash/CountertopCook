@@ -18,15 +18,28 @@ enum SeedData {
         var version = defaults.integer(forKey: versionKey)
         if version == 0 && defaults.bool(forKey: seededKey) { version = 1 }
         if force { version = 0 }
-        guard version < 3 else { return }
+        guard version < 4 else { return }
         defaults.set(true, forKey: seededKey)
-        defaults.set(3, forKey: versionKey)
+        defaults.set(4, forKey: versionKey)
 
         let base = Date(timeIntervalSince1970: 1_700_000_000)
         if version < 1 { seedFirstThree(context, base: base) }
         if version < 2 { seedSevenMore(context, base: base) }
         tagCuisines(context)
+        if version >= 1 { correctStarters(context) }
         try? context.save()
+    }
+
+    /// Version 4: the pasta starter listed 1 1/2 cups of parmesan for two, three times too much.
+    /// Fixed in installs that still have the starter as shipped; an edited amount is left alone.
+    private static func correctStarters(_ context: ModelContext) {
+        let all = (try? context.fetch(FetchDescriptor<Recipe>())) ?? []
+        for recipe in all where recipe.title == "Garlic Butter Pasta" {
+            for item in recipe.ingredients
+            where item.name == "grated parmesan" && item.amountText == "1 1/2" && item.unit == "cup" {
+                item.amountText = "1/2"
+            }
+        }
     }
 
     /// The French and Italian starters, by title. Also tags starters from earlier versions.
@@ -65,7 +78,7 @@ enum SeedData {
         insert(into: context, title: "Garlic Butter Pasta", servings: 2, minutes: 20, createdAt: base.addingTimeInterval(1),
                ingredients: [
                    ("200", "g", "spaghetti"),
-                   ("1 1/2", "cup", "grated parmesan"),
+                   ("1/2", "cup", "grated parmesan"),
                    ("3", "tbsp", "butter"),
                    ("4", "cloves", "garlic, sliced"),
                    ("1/4", "cup", "chopped parsley"),
