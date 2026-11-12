@@ -855,11 +855,13 @@ final class CountertopCookUITests: XCTestCase {
         if done.exists && done.isHittable { done.tap() }
     }
 
-    /// Scrolls the library down until the recipe's row is on screen (rows load lazily).
+    /// Scrolls the library from the top down until the recipe's book is on screen (rows load lazily).
     @discardableResult
     private func findRow(_ title: String) -> XCUIElement {
         let row = element("recipeRow_\(title)")
         _ = row.waitForExistence(timeout: 5)
+        // The shelf may be scrolled down already (after opening a later book): start at the top.
+        if !(row.exists && row.isHittable) { scrollLibraryToTop() }
         for _ in 0..<12 where !(row.exists && row.isHittable) {
             app.swipeUp()
         }
