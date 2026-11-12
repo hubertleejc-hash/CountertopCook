@@ -54,6 +54,21 @@ struct RecipeEditorView: View {
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("reviewNotice")
+                    }.warmRows()
+                    if let cover = draft.coverImage, let image = PhotoStore.image(of: cover, maxPixel: 900) {
+                        Section {
+                            Image(decorative: image, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 160)
+                                .frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .accessibilityIdentifier("reviewCover")
+                            Toggle("Use it as the book's cover", isOn: $draft.useCoverImage)
+                                .accessibilityIdentifier("reviewCoverToggle")
+                        } header: {
+                            Text("The source's photo")
+                        }.warmRows()
                     }
                     if let reference = draft.referenceText, !reference.isEmpty {
                         Section("From the source") {
@@ -68,7 +83,7 @@ struct RecipeEditorView: View {
                             }
                             .frame(maxHeight: 220)
                             .accessibilityIdentifier("reviewReference")
-                        }
+                        }.warmRows()
                     }
                 }
 
@@ -85,7 +100,7 @@ struct RecipeEditorView: View {
                     Stepper(draft.totalMinutes == 0 ? "Total time: not given" : "Total time: \(formatMinutes(draft.totalMinutes))",
                             value: $draft.totalMinutes, in: 0...2880, step: 5)
                         .accessibilityIdentifier("recipeTotalTime")
-                }
+                }.warmRows()
 
                 Section {
                     ForEach($draft.ingredients) { $item in
@@ -114,7 +129,7 @@ struct RecipeEditorView: View {
                     Text("Ingredients")
                 } footer: {
                     Text("Amounts can be fractions like 1 1/2 or 3/4.")
-                }
+                }.warmRows()
 
                 Section("Steps") {
                     ForEach($draft.steps) { $step in
@@ -138,20 +153,20 @@ struct RecipeEditorView: View {
                         Label("Add Step", systemImage: "plus.circle").foregroundStyle(Theme.navy)
                     }
                     .accessibilityIdentifier("addStep")
-                }
+                }.warmRows()
 
                 // Also at the bottom: on some devices the top bar scrolls away with a long form.
                 Section {
                     Button {
                         save()
                     } label: {
-                        Text("Save Recipe").font(Theme.body(17, bold: true)).frame(maxWidth: .infinity, minHeight: 44)
+                        Text("Save Recipe").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent).frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!draft.canSave)
                     .listRowInsets(EdgeInsets())
                     .accessibilityIdentifier("saveRecipeBottom")
-                }
+                }.warmRows()
             }
             .warmList()
             .navigationTitle(reviewing ? "Review Import" : (recipe == nil ? "New Recipe" : "Edit Recipe"))

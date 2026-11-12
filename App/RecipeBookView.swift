@@ -14,6 +14,7 @@ struct RecipeDetailView: View {
     @State private var cooking = false
     @State private var pickingToBuy = false
     @State private var picked: [PhotosPickerItem] = []
+    @State private var pickedCover: PhotosPickerItem?
     @State private var addingPhotos = false
     @FocusState private var notesFocused: Bool
 
@@ -98,6 +99,10 @@ struct RecipeDetailView: View {
             guard !items.isEmpty else { return }
             addPhotos(items)
         }
+        .onChange(of: pickedCover) { _, item in
+            guard let item else { return }
+            replaceCover(with: item)
+        }
         .onChange(of: notesFocused) { _, focused in
             if !focused { try? context.save() }
         }
@@ -132,6 +137,7 @@ struct RecipeDetailView: View {
             } label: {
                 Label("Start Cooking", systemImage: "frying.pan")
                     .font(Theme.body(20, bold: true, relativeTo: .title3))
+                    .foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity, minHeight: 56)
             }
             .buttonStyle(.borderedProminent)
@@ -188,16 +194,25 @@ struct RecipeDetailView: View {
                 }
             }
         }
-        PhotosPicker(selection: $picked, maxSelectionCount: 6, matching: .images) {
-            HStack(spacing: 8) {
-                if addingPhotos { ProgressView() }
-                Label(list.isEmpty ? "Add photos" : "Add more photos", systemImage: "camera")
+        HStack(spacing: 16) {
+            PhotosPicker(selection: $picked, maxSelectionCount: 6, matching: .images) {
+                HStack(spacing: 8) {
+                    if addingPhotos { ProgressView() }
+                    Label(list.isEmpty ? "Add photos" : "Add more", systemImage: "camera")
+                }
+                .frame(minHeight: 44, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .accessibilityIdentifier("addPhoto")
+            // The book's cover is the first photo; this puts a new one in front, any time.
+            PhotosPicker(selection: $pickedCover, matching: .images) {
+                Label(list.isEmpty ? "Choose a cover" : "Change cover", systemImage: "book.closed")
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .accessibilityIdentifier("changeCover")
+            Spacer(minLength: 0)
         }
         .foregroundStyle(Theme.navy)
         .disabled(addingPhotos)
-        .accessibilityIdentifier("addPhoto")
     }
 
     private func photoTile(_ photo: RecipePhoto) -> some View {
@@ -307,6 +322,22 @@ struct RecipeDetailView: View {
         }
     }
 
+    /// A new photo in front of the others: the book's new cover. The old cover stays among the
+    /// recipe's photos.
+    private func replaceCover(with item: PhotosPickerItem) {
+        addingPhotos = true
+        pickedCover = nil
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self), let jpeg = PhotoStore.jpeg(from: data) {
+                let photo = RecipePhoto(data: jpeg, order: (recipe.photos.map(\.order).min() ?? 1) - 1)
+                context.insert(photo)
+                photo.recipe = recipe
+                try? context.save()
+            }
+            addingPhotos = false
+        }
+    }
+
     /// Moves a photo to the front, which makes it the cover on the shelf.
     private func makeCover(_ photo: RecipePhoto) {
         photo.order = (recipe.photos.map(\.order).min() ?? 0) - 1
@@ -323,7 +354,7 @@ private struct BookPage: ViewModifier {
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.beige, lineWidth: 1)
             }
-            .shadow(color: Theme.ink.opacity(0.08), radius: 5, y: 2)
+            .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
     }
 }
 

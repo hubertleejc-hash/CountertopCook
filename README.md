@@ -7,12 +7,17 @@ Local only: no account, no server, no AI. All text is English.
 
 - **Startup page.** The Hearth mark and name for a moment, then the library.
 - **Library.** A shelf of books, one per recipe, on three shelves (Food, Drinks, Desserts), with
-  favourites, search and sorting. A book's cover is the recipe's first photo, or a plain cloth
-  cover. Long-press a book to favourite or delete it. Ten starter recipes ship with the app.
+  favourites, search and sorting. A book's cover is the recipe's first photo (added by you, or the
+  import source's own photo of the dish), full bleed under the title; without one it is a cloth
+  cover: navy, green or brick with a thin gold border. **Change cover** on the recipe page
+  replaces it any time. Long-press a book to favourite or delete it. Ten starter recipes ship with the app.
 - **A recipe opens like a book.** Paper pages for the cover and photos, the ingredients, the
   method and **My notes**, the cook's own page. Two pages side by side on a wide screen.
   Photos come from the photo library and are stored with the recipe.
-- **Always light.** The palette is fixed, so the app ignores the phone's Dark Mode.
+- **Light and Evening Hearth (dark).** Dark mode is warm espresso and cream, never black or
+  cold grey: background #1C1712, recipe half #211B15, timers half #2A2118, cards #2E2720, text
+  #F5EDE3, secondary text #C9BBA8, accent #F08A3C. It follows the phone, or the Light / Dark /
+  System switch in the library. Tricolore strips and motifs are muted at night.
 - **Import from anywhere, reviewed before saving.**
   - **+ → Import from a link.** A recipe page's link: only its schema.org Recipe data is read, never the story text.
   - A YouTube link, or Share → Hearth from the YouTube app: the video's title and description

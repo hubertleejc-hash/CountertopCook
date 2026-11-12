@@ -19,9 +19,10 @@ struct CountertopCookApp: App {
             fatalError("Could not open the recipe store: \(error)")
         }
         SeedData.seedIfNeeded(container.mainContext, force: isUITesting)
+        Appearance.prepareForLaunch()
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Lato in the navigation bars too (Lora is kept for recipe titles).
-        let ink = UIColor(hex: 0x221C15)
+        let ink = Theme.inkUI
         if let large = UIFont(name: "Lato-Bold", size: 34), let small = UIFont(name: "Lato-Bold", size: 17) {
             UINavigationBar.appearance().largeTitleTextAttributes = [.font: large, .foregroundColor: ink]
             UINavigationBar.appearance().titleTextAttributes = [.font: small, .foregroundColor: ink]
@@ -34,9 +35,6 @@ struct CountertopCookApp: App {
                 .environment(timers)
                 // Burnt orange instead of system blue for every button, toggle and link.
                 .tint(Theme.accent)
-                // The palette is fixed (dark-brown ink on cream), so the app stays light when
-                // the phone is in Dark Mode. Info.plist says the same for system-drawn parts.
-                .preferredColorScheme(.light)
         }
         .modelContainer(container)
     }

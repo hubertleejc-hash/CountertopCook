@@ -33,7 +33,21 @@ enum LinkImport {
         }
         let (html, page) = try await fetch(url)
         let imported = try RecipeImporter.parse(html: html, url: page)
-        return RecipeDraft(imported: imported, sourceURL: page.absoluteString, sourceName: imported.siteName)
+        var draft = RecipeDraft(imported: imported, sourceURL: page.absoluteString, sourceName: imported.siteName)
+        draft.coverImage = await photo(at: imported.imageURL)
+        return draft
+    }
+
+    /// The source's own photo of the dish, shrunk for storage; nil when it has none or it can't
+    /// be loaded. A missing photo never stops an import.
+    static func photo(at url: URL?) async -> Data? {
+        guard let url else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+              data.count < 25_000_000 else { return nil }
+        return PhotoStore.jpeg(from: data)
     }
 
     /// Reads a draft from pasted text. When no ingredient or step list can be read, the text
@@ -90,7 +104,10 @@ enum LinkImport {
         // The video's own title, not the description's first line.
         imported.title = info.title ?? imported.title
         let source = ["YouTube", info.channel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        return RecipeDraft(imported: imported, sourceURL: watch.absoluteString, sourceName: source, referenceText: reference)
+        var draft = RecipeDraft(imported: imported, sourceURL: watch.absoluteString, sourceName: source, referenceText: reference)
+        // The video's own thumbnail, as YouTube publishes it for every video.
+        draft.coverImage = await photo(at: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"))
+        return draft
     }
 
     // MARK: Fetching

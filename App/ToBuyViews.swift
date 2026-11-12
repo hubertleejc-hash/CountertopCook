@@ -46,7 +46,7 @@ struct ToBuyPickerView: View {
                     Text("Tick what you already have")
                 } footer: {
                     Text("Everything left unticked goes on your to-buy list. The same item from another recipe is added to the same line.")
-                }
+                }.warmRows()
                 Section {
                     Button {
                         ToBuy.add(needed, from: recipe.title, context: context)
@@ -54,13 +54,14 @@ struct ToBuyPickerView: View {
                     } label: {
                         Text(needed.isEmpty ? "Nothing to buy" : (needed.count == 1 ? "Add 1 item to the list" : "Add \(needed.count) items to the list"))
                             .font(Theme.body(17, bold: true))
+                            .foregroundStyle(Theme.onAccent)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(needed.isEmpty)
                     .listRowInsets(EdgeInsets())
                     .accessibilityIdentifier("confirmToBuy")
-                }
+                }.warmRows()
             }
             .font(Theme.body())
             .warmList()
@@ -90,7 +91,7 @@ struct ShoppingListView: View {
                     Text("Nothing to buy yet. Open a recipe and tap “Add to the to-buy list”.")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("toBuyEmpty")
-                }
+                }.warmRows()
             }
             if !waiting.isEmpty {
                 Section {
@@ -99,7 +100,7 @@ struct ShoppingListView: View {
                 } header: {
                     Text(waiting.count == 1 ? "To buy · 1 item" : "To buy · \(waiting.count) items")
                         .accessibilityIdentifier("toBuyCount")
-                }
+                }.warmRows()
             }
             if !bought.isEmpty {
                 Section {
@@ -109,7 +110,7 @@ struct ShoppingListView: View {
                         .accessibilityIdentifier("clearBought")
                 } header: {
                     Text("Bought")
-                }
+                }.warmRows()
             }
         }
         .font(Theme.body())

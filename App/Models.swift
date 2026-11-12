@@ -186,6 +186,10 @@ struct RecipeDraft: Equatable {
     var notInSource: [String] = []
     /// Import review only: the source's own text, shown when no recipe list could be read from it.
     var referenceText: String?
+    /// Import review only: the source's own photo of the dish (a JPEG), and whether to keep it as
+    /// the cover of the recipe's book.
+    var coverImage: Data?
+    var useCoverImage = true
 
     init() {}
 
@@ -252,6 +256,12 @@ struct RecipeDraft: Equatable {
         target.sourceURL = sourceURL
         target.sourceName = sourceName
         target.cuisine = cuisine
+
+        if recipe == nil, useCoverImage, let coverImage {
+            let photo = RecipePhoto(data: coverImage, order: 0)
+            context.insert(photo)
+            photo.recipe = target
+        }
 
         let cleanIngredients = ingredients.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
         target.ingredients = cleanIngredients.enumerated().map { index, item in

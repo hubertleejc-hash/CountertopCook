@@ -14,19 +14,21 @@ enum Cuisine: String, CaseIterable {
         }
     }
 
-    /// Bistro navy / basil green.
+    /// Bistro navy / basil green; softer at night, so the motif doesn't glare on espresso.
     var accent: Color {
         switch self {
-        case .french: return Color(hex: 0x1F3A5F)
-        case .italian: return Color(hex: 0x3E7C3A)
+        case .french: return Color(light: 0x1F3A5F, dark: 0x8FA6C4)
+        case .italian: return Color(light: 0x3E7C3A, dark: 0x86A97E)
         }
     }
 
-    /// Flag colours, left to right.
+    /// Flag colours, left to right. Muted at night: the same flag, turned down.
     var tricolore: [Color] {
         switch self {
-        case .french: return [Color(hex: 0x0055A4), .white, Color(hex: 0xEF4135)]
-        case .italian: return [Color(hex: 0x009246), .white, Color(hex: 0xCE2B37)]
+        case .french: return [Color(light: 0x0055A4, dark: 0x5D7BA0), Color(light: 0xFFFFFF, dark: 0xD9CDBE),
+                              Color(light: 0xEF4135, dark: 0xB4685D)]
+        case .italian: return [Color(light: 0x009246, dark: 0x5E8F68), Color(light: 0xFFFFFF, dark: 0xD9CDBE),
+                               Color(light: 0xCE2B37, dark: 0xAE5D61)]
         }
     }
 

@@ -4,6 +4,7 @@ import SwiftUI
 /// library. A tap skips the wait.
 struct RootView: View {
     @State private var showingSplash = RootView.wantsSplash
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
 
     /// UI tests skip the startup page unless they ask for it with `-splash`.
     private static var wantsSplash: Bool {
@@ -26,6 +27,8 @@ struct RootView: View {
                     .zIndex(1)
             }
         }
+        .onAppear { Appearance.apply(Appearance(rawValue: appearance) ?? .system) }
+        .onChange(of: appearance) { _, value in Appearance.apply(Appearance(rawValue: value) ?? .system) }
         .task {
             guard showingSplash else { return }
             try? await Task.sleep(for: .seconds(Self.splashSeconds))
@@ -46,7 +49,7 @@ struct SplashView: View {
             VStack(spacing: 18) {
                 HearthLogo()
                     .frame(width: 132, height: 132)
-                    .shadow(color: Theme.ink.opacity(0.12), radius: 14, y: 6)
+                    .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
                 Text("Hearth")
                     .font(Theme.text(44, bold: true))
                     .foregroundStyle(Theme.ink)

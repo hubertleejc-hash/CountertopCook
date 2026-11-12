@@ -117,7 +117,7 @@ struct TimersPane: View {
                 .padding(.horizontal, dense ? 6 : 18)
                 .frame(maxWidth: dense ? .infinity : nil, minHeight: dense ? 32 : 44)
         }
-        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: Theme.onPill))
         .accessibilityLabel("Start \(preset) minute timer")
         .accessibilityIdentifier("preset_\(preset)")
     }
@@ -141,7 +141,7 @@ struct TimersPane: View {
             } label: {
                 Text("Start").font(Theme.text(17, bold: true)).lineLimit(1).fixedSize().padding(.horizontal, 16).frame(minHeight: 36)
             }
-            .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+            .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: Theme.onPill))
             .accessibilityIdentifier("startCustomTimer")
         }
     }
@@ -403,7 +403,7 @@ struct ConverterView: View {
                             .frame(minHeight: 34)
                     }
                     .buttonStyle(SoftButtonStyle(fill: selected ? Theme.pill : Theme.beige,
-                                                 foreground: selected ? .white : Theme.ink))
+                                                 foreground: selected ? Theme.onPill : Theme.ink))
                     .accessibilityValue(selected ? "selected" : "")
                     .accessibilityIdentifier("converterPair_\(pair.0.rawValue)")
                 }

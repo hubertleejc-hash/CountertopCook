@@ -61,14 +61,21 @@ struct RecipeListView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    searchField
+                    // Search, the to-buy list and + sit in the page, not in the navigation bar:
+                    // on a closed iPhone Duo the bar's buttons float in the status strip.
+                    HStack(spacing: 10) {
+                        searchField
+                        toBuyButton
+                        addMenu
+                    }
                     filterChips
-                    HStack {
+                    HStack(spacing: 4) {
                         Text(shown.count == 1 ? "1 recipe" : "\(shown.count) recipes")
                             .font(Theme.body(14, relativeTo: .footnote))
                             .foregroundStyle(Theme.muted)
                             .accessibilityIdentifier("libraryCount")
                         Spacer()
+                        AppearanceMenu()
                         Picker("Sort", selection: $sort) {
                             ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
                         }
@@ -95,39 +102,6 @@ struct RecipeListView: View {
             .navigationTitle("Recipes")
             .navigationDestination(for: Recipe.self) { RecipeDetailView(recipe: $0) }
             .navigationDestination(isPresented: $showingToBuy) { ShoppingListView() }
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        showingToBuy = true
-                    } label: {
-                        Label(toBuyCount == 0 ? "To buy" : "To buy, \(toBuyCount)", systemImage: toBuyCount == 0 ? "cart" : "cart.fill")
-                    }
-                    .accessibilityIdentifier("openToBuy")
-                    Menu {
-                        Button {
-                            sheet = .link("", start: false)
-                        } label: {
-                            Label("Import from a link", systemImage: "link")
-                        }
-                        .accessibilityIdentifier("menuImportLink")
-                        Button {
-                            sheet = .paste("")
-                        } label: {
-                            Label("Paste recipe text", systemImage: "doc.on.clipboard")
-                        }
-                        .accessibilityIdentifier("menuPasteText")
-                        Button {
-                            sheet = .manual
-                        } label: {
-                            Label("Type it in by hand", systemImage: "square.and.pencil")
-                        }
-                        .accessibilityIdentifier("addRecipe")
-                    } label: {
-                        Label("Add Recipe", systemImage: "plus")
-                    }
-                    .accessibilityIdentifier("addMenu")
-                }
-            }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
                 case .manual:
@@ -157,6 +131,7 @@ struct RecipeListView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("recipeRow_\(recipe.title)")
+                .accessibilityValue(recipe.photos.isEmpty ? "plain cover" : "photo cover")
                 .contextMenu {
                     Button {
                         recipe.isFavorite.toggle()
@@ -174,6 +149,52 @@ struct RecipeListView: View {
                 }
             }
         }
+    }
+
+    private var toBuyButton: some View {
+        Button {
+            showingToBuy = true
+        } label: {
+            Image(systemName: toBuyCount == 0 ? "cart" : "cart.fill")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.card, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(toBuyCount == 0 ? "To buy" : "To buy, \(toBuyCount)")
+        .accessibilityIdentifier("openToBuy")
+    }
+
+    private var addMenu: some View {
+        Menu {
+            Button {
+                sheet = .link("", start: false)
+            } label: {
+                Label("Import from a link", systemImage: "link")
+            }
+            .accessibilityIdentifier("menuImportLink")
+            Button {
+                sheet = .paste("")
+            } label: {
+                Label("Paste recipe text", systemImage: "doc.on.clipboard")
+            }
+            .accessibilityIdentifier("menuPasteText")
+            Button {
+                sheet = .manual
+            } label: {
+                Label("Type it in by hand", systemImage: "square.and.pencil")
+            }
+            .accessibilityIdentifier("addRecipe")
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Theme.onAccent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent, in: Circle())
+        }
+        .accessibilityLabel("Add Recipe")
+        .accessibilityIdentifier("addMenu")
     }
 
     private var searchField: some View {
@@ -199,42 +220,56 @@ struct RecipeListView: View {
         .background(Theme.card, in: Capsule())
     }
 
+    /// All / Food / Drinks / Desserts / Favourites. One row when it fits; else the same row with
+    /// smaller chips; else a row that scrolls inside the page margins (never under the Duo's
+    /// status strip), so Favourites is always reachable and never cut by the screen edge.
     private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                filterChip("All", selected: category == nil && !favouritesOnly, id: "category_All") {
-                    category = nil
-                    favouritesOnly = false
-                }
-                ForEach(RecipeCategory.allCases) { item in
-                    filterChip(item.rawValue, symbol: item.symbol, selected: category == item, id: "category_\(item.rawValue)") {
-                        category = category == item ? nil : item
-                    }
-                }
-                filterChip("Favourites", symbol: favouritesOnly ? "heart.fill" : "heart", selected: favouritesOnly,
-                           id: "favouritesFilter") {
-                    favouritesOnly.toggle()
-                }
+        ViewThatFits(in: .horizontal) {
+            chipRow(compact: false)
+            chipRow(compact: true)
+            ScrollView(.horizontal, showsIndicators: false) {
+                chipRow(compact: true)
             }
-            .padding(.horizontal, 20)
+            .scrollClipDisabled(false)
         }
-        // The chips scroll edge to edge, past the page margin.
-        .padding(.horizontal, -20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
-    private func filterChip(_ title: String, symbol: String? = nil, selected: Bool, id: String,
-                            action: @escaping () -> Void) -> some View {
+    private func chipRow(compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 8) {
+            filterChip("All", selected: category == nil && !favouritesOnly, compact: compact, id: "category_All") {
+                category = nil
+                favouritesOnly = false
+            }
+            ForEach(RecipeCategory.allCases) { item in
+                filterChip(item.rawValue, symbol: compact ? nil : item.symbol, selected: category == item, compact: compact,
+                           id: "category_\(item.rawValue)") {
+                    category = category == item ? nil : item
+                }
+            }
+            filterChip("Favourites", symbol: favouritesOnly ? "heart.fill" : "heart", selected: favouritesOnly, compact: compact,
+                       iconOnly: compact, id: "favouritesFilter") {
+                favouritesOnly.toggle()
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func filterChip(_ title: String, symbol: String? = nil, selected: Bool, compact: Bool = false,
+                            iconOnly: Bool = false, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 if let symbol { Image(systemName: symbol).font(.footnote) }
-                Text(title).font(Theme.body(15, bold: true, relativeTo: .subheadline))
+                if !iconOnly { Text(title).font(Theme.body(15, bold: true, relativeTo: .subheadline)) }
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 36)
-            .foregroundStyle(selected ? Color.white : Theme.ink)
+            .padding(.horizontal, iconOnly ? 0 : (compact ? 11 : 14))
+            .frame(minWidth: iconOnly ? 36 : nil, minHeight: 36)
+            .foregroundStyle(selected ? Theme.onPill : Theme.ink)
             .background(selected ? Theme.pill : Theme.beige, in: Capsule())
         }
         .buttonStyle(.borderless)
+        .accessibilityLabel(title)
         .accessibilityValue(selected ? "selected" : "")
         .accessibilityIdentifier(id)
     }
@@ -257,18 +292,27 @@ struct RecipeListView: View {
     }
 }
 
-/// One recipe on the shelf, as a book: its first photo for a cover, or a plain cloth cover in
-/// the shelf's colour, with the title in Lora, a spine down the left and the cuisine's ribbon.
+/// One recipe on the shelf, as a book.
+/// - With a photo (added with Add photos, or the import source's own): the photo, full bleed,
+///   with a soft dark gradient at the foot and the white serif title over it. The first photo
+///   is the cover.
+/// - Without one: a cloth cover, navy for food, green for drinks, brick for desserts, with a
+///   thin gold border inside the edge, a small gold motif at the top, the tricolore strip above
+///   the title, the title in white Lora and the time and steps below.
+/// Covers look the same by day and by night: they are the books themselves.
 struct BookCover: View {
     let recipe: Recipe
 
-    /// Cloth colours for books without a photo: navy for food, deep green for drinks, brick for
-    /// desserts. All dark enough for white type.
+    static let navy = Color(hex: 0x1B2F4A)
+    static let green = Color(hex: 0x2B5245)
+    static let brick = Color(hex: 0x7E3626)
+    static let gold = Color(hex: 0xC9A45C)
+
     private var cloth: Color {
         switch recipe.categoryKind {
-        case .food: return Theme.navy
-        case .drinks: return Color(hex: 0x2F5D50)
-        case .desserts: return Color(hex: 0x8C3B2A)
+        case .food: return Self.navy
+        case .drinks: return Self.green
+        case .desserts: return Self.brick
         }
     }
 
@@ -283,28 +327,35 @@ struct BookCover: View {
         UnevenRoundedRectangle(topLeadingRadius: 3, bottomLeadingRadius: 3, bottomTrailingRadius: 10, topTrailingRadius: 10)
     }
 
+    private var cover: RecipePhoto? { recipe.sortedPhotos.first }
+
     var body: some View {
         cloth
             .aspectRatio(3 / 4, contentMode: .fit)
             .overlay {
-                if let photo = recipe.sortedPhotos.first {
-                    PhotoImage(photo: photo, maxPixel: 700)
-                    // Darkens the foot of the photo so the title reads on any picture.
-                    LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .center, endPoint: .bottom)
+                if let cover {
+                    PhotoImage(photo: cover, maxPixel: 700)
+                    // A soft dark gradient at the foot, so the white title reads on any picture.
+                    LinearGradient(stops: [.init(color: .clear, location: 0.35),
+                                           .init(color: .black.opacity(0.35), location: 0.62),
+                                           .init(color: .black.opacity(0.78), location: 1)],
+                                   startPoint: .top, endPoint: .bottom)
                 } else {
+                    shape.inset(by: 8).stroke(Self.gold.opacity(0.85), lineWidth: 1)
                     Image(systemName: recipe.categoryKind.symbol)
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundStyle(.white.opacity(0.22))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(14)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Self.gold)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 24)
                         .accessibilityHidden(true)
-                    shape.inset(by: 7).stroke(.white.opacity(0.28), lineWidth: 1)
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 7) {
                     if let cuisine = recipe.cuisineKind {
                         TricoloreStrip(cuisine: cuisine, width: 34, height: 4)
+                    } else if cover == nil {
+                        Self.gold.frame(width: 26, height: 1.5).accessibilityHidden(true)
                     }
                     Text(recipe.title)
                         .font(Theme.title(19))
@@ -317,16 +368,16 @@ struct BookCover: View {
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .padding(.leading, 24)
-                .padding(.trailing, 14)
-                .padding(.bottom, 16)
+                .padding(.trailing, 16)
+                .padding(.bottom, 20)
             }
-            .overlay(alignment: .topLeading) {
+            .overlay(alignment: .topTrailing) {
                 if recipe.isFavorite {
                     Image(systemName: "heart.fill")
                         .font(.footnote)
-                        .foregroundStyle(.white)
-                        .padding(.leading, 24)
-                        .padding(.top, 16)
+                        .foregroundStyle(cover == nil ? Self.gold : .white)
+                        .padding(.trailing, 18)
+                        .padding(.top, 18)
                         .accessibilityLabel("Favourite")
                 }
             }
@@ -338,8 +389,9 @@ struct BookCover: View {
                     .accessibilityHidden(true)
             }
             .clipShape(shape)
-            .shadow(color: Theme.ink.opacity(0.24), radius: 6, x: 2, y: 4)
+            .shadow(color: .black.opacity(0.24), radius: 6, x: 2, y: 4)
             .accessibilityElement(children: .combine)
+            .accessibilityValue(cover == nil ? "plain cover" : "photo cover")
     }
 }
 
@@ -388,12 +440,12 @@ struct ImportLinkView: View {
                         Text("Link")
                     } footer: {
                         Text("You review every import before it is saved. From YouTube or any other app, you can also use Share and choose Hearth.")
-                    }
+                    }.warmRows()
                     Section {
                         Button(action: startImport) {
                             HStack(spacing: 8) {
                                 if importing { ProgressView().accessibilityIdentifier("importProgress") }
-                                Text(importing ? "Reading…" : "Import").font(Theme.body(17, bold: true))
+                                Text(importing ? "Reading…" : "Import").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -401,7 +453,7 @@ struct ImportLinkView: View {
                         .disabled(importing || link.trimmingCharacters(in: .whitespaces).isEmpty)
                         .listRowInsets(EdgeInsets())
                         .accessibilityIdentifier("importButton")
-                    }
+                    }.warmRows()
                 }
                 .warmList()
                 .navigationTitle("Import Link")
@@ -464,18 +516,18 @@ struct PasteTextView: View {
                         Text("Recipe text")
                     } footer: {
                         Text("Paste the whole recipe. Hearth looks for an Ingredients list and a Method or Instructions list. It never fills in an amount or a time the text doesn't give.")
-                    }
+                    }.warmRows()
                     Section {
                         Button {
                             draft = LinkImport.draft(fromText: text)
                         } label: {
-                            Text("Read recipe").font(Theme.body(17, bold: true)).frame(maxWidth: .infinity, minHeight: 44)
+                            Text("Read recipe").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent).frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .listRowInsets(EdgeInsets())
                         .accessibilityIdentifier("pasteTextRead")
-                    }
+                    }.warmRows()
                 }
                 .warmList()
                 .navigationTitle("Paste Text")

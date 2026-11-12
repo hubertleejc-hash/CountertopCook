@@ -36,6 +36,9 @@ enum PhotoStore {
         return image
     }
 
+    /// Picture data decoded for the screen, not cached (the review screen's one photo).
+    static func image(of data: Data, maxPixel: Int) -> CGImage? { thumbnail(of: data, maxPixel: maxPixel) }
+
     private static func thumbnail(of data: Data, maxPixel: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
@@ -53,7 +56,7 @@ struct PhotoImage: View {
     var maxPixel = 1200
 
     var body: some View {
-        Color(hex: 0xEFE7D6)
+        Theme.beige
             .overlay {
                 if let image = PhotoStore.image(for: photo, maxPixel: maxPixel) {
                     Image(decorative: image, scale: 1)

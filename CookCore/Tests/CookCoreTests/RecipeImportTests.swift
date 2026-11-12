@@ -15,6 +15,7 @@ private func fixture(_ name: String) throws -> String {
         let recipe = try RecipeImporter.parse(html: try fixture("recipe.html"),
                                               url: URL(string: "http://127.0.0.1:8765/recipe.html"))
         #expect(recipe.title == "Weeknight Lemon Rice")
+        #expect(recipe.imageURL?.absoluteString == "http://127.0.0.1:8765/dish.jpg")
         #expect(recipe.servings == 4)
         #expect(recipe.totalMinutes == 25)
         #expect(recipe.siteName == "Test Kitchen")
@@ -35,6 +36,28 @@ private func fixture(_ name: String) throws -> String {
         // Only recipe fields: no description or story text.
         let everything = ([recipe.title] + recipe.steps + recipe.ingredients.map(\.name)).joined(separator: " ")
         #expect(!everything.contains("MUST NOT BE IMPORTED"))
+    }
+
+    @Test func photoComesFromTheSourceOnly() throws {
+        func page(_ image: String, og: String = "") -> String {
+            """
+            <html><head>\(og.isEmpty ? "" : "<meta property=\"og:image\" content=\"\(og)\">")
+            <script type="application/ld+json">
+            {"@type":"Recipe","name":"Soup",\(image)"recipeIngredient":["1 onion"],"recipeInstructions":["Cook."]}
+            </script></head></html>
+            """
+        }
+        let base = URL(string: "https://example.com/recipes/soup")
+        #expect(try RecipeImporter.parse(html: page(#""image":"https://cdn.example.com/a.jpg","#), url: base).imageURL?.absoluteString
+                == "https://cdn.example.com/a.jpg")
+        #expect(try RecipeImporter.parse(html: page(#""image":["/b.jpg","/c.jpg"],"#), url: base).imageURL?.absoluteString
+                == "https://example.com/b.jpg")
+        #expect(try RecipeImporter.parse(html: page(#""image":[{"@type":"ImageObject","url":"d.jpg"}],"#), url: base).imageURL?.absoluteString
+                == "https://example.com/recipes/d.jpg")
+        #expect(try RecipeImporter.parse(html: page("", og: "https://example.com/og.jpg"), url: base).imageURL?.absoluteString
+                == "https://example.com/og.jpg")
+        #expect(try RecipeImporter.parse(html: page(""), url: base).imageURL == nil)
+        #expect(try RecipeImporter.parse(html: page(#""image":"data:image/png;base64,xx","#), url: base).imageURL == nil)
     }
 
     @Test func cuisineComesFromRecipeCuisine() throws {

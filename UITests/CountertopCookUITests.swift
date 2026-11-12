@@ -79,6 +79,81 @@ final class CountertopCookUITests: XCTestCase {
         snapshot("library-shelf")
     }
 
+    // MARK: Evening Hearth: warm dark colours, and the Light / Dark / System switch
+
+    func testDarkModeColours() {
+        app.terminate()
+        app.launchArguments = ["-uitesting", "-startAppearance", "dark"]
+        app.launch()
+        let menu = element("appearanceMenu")
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "No appearance switch in the library")
+        XCTAssertEqual(menu.value as? String, "Dark")
+        let window = app.windows.firstMatch.frame
+        let shot = screenshot()
+        // The page: warm espresso, not black. A starter's plain cover: navy cloth.
+        expectColour(shot, at: CGPoint(x: window.minX + 6, y: menu.frame.midY), is: 0x1C1712, "dark library background")
+        let book = findRow("Pan-Seared Steak").frame
+        expectColour(screenshot(), at: CGPoint(x: book.midX, y: book.minY + book.height * 0.3), is: 0x1B2F4A, "plain cover")
+        snapshot("dark-library")
+
+        // A recipe's book: its pages are warm brown cards with cream text.
+        element("recipeRow_Pan-Seared Steak").tap()
+        let title = element("recipeTitleHeader")
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        expectColour(screenshot(), at: CGPoint(x: title.frame.minX - 8, y: title.frame.midY), is: 0x2E2720, "dark book page")
+        snapshot("dark-recipe-book")
+        element("startCooking").tap()
+        XCTAssertTrue(element("stepText").waitForExistence(timeout: 5))
+        waitForCookModeToSettle()
+        snapshot("dark-cook-mode")
+        element("exitCook").tap()
+        XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
+        goBackToLibrary()
+
+        // Light from the switch: back to the daytime cream at once.
+        scrollLibraryToTop()
+        element("appearanceMenu").tap()
+        let light = element("appearance_light")
+        (light.waitForExistence(timeout: 3) ? light : app.buttons["Light"].firstMatch).tap()
+        let lit = expectation(for: NSPredicate(format: "value == 'Light'"), evaluatedWith: element("appearanceMenu"))
+        wait(for: [lit], timeout: 5)
+        sleep(1)
+        expectColour(screenshot(), at: CGPoint(x: window.minX + 6, y: element("appearanceMenu").frame.midY), is: 0xFDF6E9,
+                     "light library background")
+        snapshot("light-library")
+    }
+
+    // MARK: Library: the filter row and the cart / + fit on screen
+
+    func testLibraryFilterRowAndButtonsFit() {
+        let favourites = element("favouritesFilter")
+        XCTAssertTrue(favourites.waitForExistence(timeout: 5))
+        // A row that had to scroll: bring Favourites in from the right.
+        for _ in 0..<3 where !favourites.isHittable {
+            element("category_Desserts").swipeLeft()
+        }
+        let add = element("addMenu"), cart = element("openToBuy"), search = element("librarySearch")
+        let window = app.windows.firstMatch.frame
+        print("FILTERS: favourites=\(favourites.frame) add=\(add.frame) cart=\(cart.frame) window=\(window)")
+        XCTAssertTrue(favourites.isHittable, "Favourites can't be reached")
+        // Favourites ends inside the page's right margin, where the + button ends, not under the
+        // screen edge or the Duo's status strip.
+        XCTAssertGreaterThanOrEqual(favourites.frame.minX, window.minX)
+        XCTAssertLessThanOrEqual(favourites.frame.maxX, add.frame.maxX + 1, "Favourites runs past the page margin")
+        // The cart and + are on the page, beside the search field, clear of the filter row and
+        // below the navigation bar.
+        for button in [cart, add] {
+            XCTAssertTrue(button.isHittable, "\(button.identifier) can't be tapped")
+            XCTAssertLessThanOrEqual(button.frame.maxX, window.maxX)
+            XCTAssertFalse(button.frame.intersects(favourites.frame), "\(button.identifier) overlaps the filter row")
+            XCTAssertLessThan(button.frame.maxY, favourites.frame.minY, "\(button.identifier) isn't above the filter row")
+            XCTAssertEqual(button.frame.midY, search.frame.midY, accuracy: 6, "\(button.identifier) isn't beside the search field")
+        }
+        favourites.tap()
+        XCTAssertEqual(favourites.value as? String, "selected")
+        snapshot("library-filters")
+    }
+
     // MARK: A recipe opens as a book and keeps the cook's own notes
 
     func testRecipeOpensAsBookAndKeepsNotes() {
@@ -139,6 +214,9 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertFalse(element("reviewMissing").exists, "Review says something is missing: \(element("reviewMissing").label)")
         XCTAssertFalse(text(containing: "MUST NOT BE IMPORTED").exists, "Story or description text was imported")
         XCTAssertFalse(element("recipeRow_Weeknight Lemon Rice").exists, "Saved before the review was confirmed")
+        // The page publishes a photo of the dish: the review offers it as the book's cover.
+        XCTAssertTrue(element("reviewCover").exists, "The source's photo isn't on the review screen")
+        XCTAssertEqual(element("reviewCoverToggle").value as? String, "1", "The source's photo isn't chosen as the cover")
         // The review sheet scrolls: the third ingredient row comes fully into view. Swipe the
         // form itself (on iPad it is a sheet in the middle of the screen).
         let third = element("ingredientName_2")
@@ -187,6 +265,12 @@ final class CountertopCookUITests: XCTestCase {
         element("exitCook").tap()
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
         goBackToLibrary()
+
+        // Its book on the shelf has the source's photo for a cover; the starters, with no photo,
+        // have the plain cloth cover.
+        XCTAssertEqual(findRow("Weeknight Lemon Rice").value as? String, "photo cover")
+        snapshot("library-photo-cover")
+        XCTAssertEqual(findRow("Pan-Seared Steak").value as? String, "plain cover")
 
         // A page with no recipe card: a clear error, no review screen, and nothing is added.
         chooseAdd("menuImportLink", titled: "Import from a link")
@@ -265,6 +349,7 @@ final class CountertopCookUITests: XCTestCase {
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))
         goBackToLibrary()
 
+        scrollLibraryToTop()
         element("openToBuy").tap()
         // 6 + 6 ingredients, but butter and garlic are in both recipes: one line each, amounts added.
         let count = element("toBuyCount")
@@ -790,6 +875,7 @@ final class CountertopCookUITests: XCTestCase {
 
     /// Opens the library's + menu and picks one way of adding a recipe.
     private func chooseAdd(_ id: String, titled title: String) {
+        scrollLibraryToTop()
         let menu = element("addMenu")
         (menu.waitForExistence(timeout: 5) ? menu : app.buttons["Add Recipe"].firstMatch).tap()
         let item = element(id)
@@ -898,6 +984,38 @@ final class CountertopCookUITests: XCTestCase {
                 XCTAssertGreaterThanOrEqual(element(id).frame.minY, window.minY + 44, "\(id) under the status bar in \(name)")
             }
         }
+    }
+
+    /// The screen as it is now: the one that shows something (see `snapshot`).
+    private func screenshot() -> XCUIScreenshot {
+        let shots = XCUIScreen.screens.map { $0.screenshot() }
+        return shots.first(where: { !isBlank($0.image) }) ?? XCUIScreen.main.screenshot()
+    }
+
+    /// Checks the colour at a point (in window points) against a hex colour, in sRGB.
+    private func expectColour(_ shot: XCUIScreenshot, at point: CGPoint, is hex: UInt32, _ what: String,
+                              tolerance: Int = 10, file: StaticString = #filePath, line: UInt = #line) {
+        guard let cg = shot.image.cgImage else { return XCTFail("No screenshot for \(what)", file: file, line: line) }
+        let window = app.windows.firstMatch.frame
+        let scale = CGFloat(cg.width) / max(window.width, 1)
+        let x = Int((point.x - window.minX) * scale), y = Int((point.y - window.minY) * scale)
+        guard x >= 0, y >= 0, x < cg.width, y < cg.height, let pixel = cg.cropping(to: CGRect(x: x, y: y, width: 1, height: 1))
+        else { return XCTFail("\(what): \(point) is off the screenshot", file: file, line: line) }
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let drawn = rgba.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drawn else { return XCTFail("\(what): couldn't read the pixel", file: file, line: line) }
+        let want = [Int((hex >> 16) & 0xFF), Int((hex >> 8) & 0xFF), Int(hex & 0xFF)]
+        let got = rgba.prefix(3).map(Int.init)
+        let text = got.map { String(format: "%02X", $0) }.joined()
+        print("COLOUR: \(what) at \(point) = #\(text), want #\(String(format: "%06X", hex))")
+        XCTAssertTrue(zip(got, want).allSatisfy { abs($0 - $1) <= tolerance },
+                      "\(what) is #\(text), want #\(String(format: "%06X", hex))", file: file, line: line)
     }
 
     private func snapshot(_ name: String) {

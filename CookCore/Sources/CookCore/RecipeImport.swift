@@ -25,6 +25,9 @@ public struct ImportedRecipe: Equatable {
     public var cuisine: String?
     /// recipeCategory, as published ("Dessert", "Drinks", …); nil when the page gives none.
     public var category: String? = nil
+    /// The recipe's own photo, as the source publishes it (schema.org image, else the page's
+    /// og:image); nil when it has none. Only a picture the source gives, never a stock one.
+    public var imageURL: URL? = nil
 }
 
 public enum RecipeImportError: Error, Equatable, LocalizedError {
@@ -68,7 +71,34 @@ public enum RecipeImporter {
             steps: steps,
             siteName: siteName(html: html, blocks: blocks, recipe: recipe, url: url),
             cuisine: strings(recipe["recipeCuisine"]).map(clean).first { !$0.isEmpty },
-            category: strings(recipe["recipeCategory"]).map(clean).first { !$0.isEmpty })
+            category: strings(recipe["recipeCategory"]).map(clean).first { !$0.isEmpty },
+            imageURL: imageURL(recipe["image"], html: html, page: url))
+    }
+
+    /// The recipe's photo: schema.org image (a link, a list of links, or ImageObjects with a
+    /// url), resolved against the page; else the page's og:image. Only http(s) links count.
+    static func imageURL(_ value: Any?, html: String, page: URL?) -> URL? {
+        func links(_ value: Any?) -> [String] {
+            if let text = value as? String { return [text] }
+            if let array = value as? [Any] { return array.flatMap(links) }
+            if let object = value as? [String: Any] { return links(object["url"] ?? object["contentUrl"] ?? object["@id"]) }
+            return []
+        }
+        var candidates = links(value)
+        if let regex = try? NSRegularExpression(
+            pattern: #"<meta\b[^>]*\b(?:property|name)\s*=\s*["']og:image["'][^>]*\bcontent\s*=\s*["']([^"']+)["']"#,
+            options: .caseInsensitive),
+           let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+           let range = Range(match.range(at: 1), in: html) {
+            candidates.append(String(html[range]))
+        }
+        for candidate in candidates {
+            let text = clean(candidate)
+            guard !text.isEmpty, let url = URL(string: text, relativeTo: page)?.absoluteURL,
+                  let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { continue }
+            return url
+        }
+        return nil
     }
 
     // MARK: JSON-LD

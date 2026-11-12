@@ -13,9 +13,18 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0xFB / 255, green: 0xF3 / 255, blue: 0xE4 / 255, alpha: 1)
+        // Hearth's cream by day, Evening Hearth espresso at night.
+        view.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0x1C / 255, green: 0x17 / 255, blue: 0x12 / 255, alpha: 1)
+                : UIColor(red: 0xFB / 255, green: 0xF3 / 255, blue: 0xE4 / 255, alpha: 1)
+        }
         label.text = "Sending to Hearth…"
-        label.textColor = UIColor(red: 0x22 / 255, green: 0x1C / 255, blue: 0x15 / 255, alpha: 1)
+        label.textColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0xF5 / 255, green: 0xED / 255, blue: 0xE3 / 255, alpha: 1)
+                : UIColor(red: 0x22 / 255, green: 0x1C / 255, blue: 0x15 / 255, alpha: 1)
+        }
         label.font = .preferredFont(forTextStyle: .headline)
         label.numberOfLines = 0
         label.textAlignment = .center

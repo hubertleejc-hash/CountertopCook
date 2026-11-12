@@ -276,7 +276,7 @@ struct CookModeView: View {
                             .frame(maxWidth: .infinity, minHeight: 40)
                     }
                     .buttonStyle(SoftButtonStyle(fill: focus == item ? Theme.pill : Theme.beige,
-                                                 foreground: focus == item ? .white : Theme.ink))
+                                                 foreground: focus == item ? Theme.onPill : Theme.ink))
                     .accessibilityValue(focus == item ? "selected" : "")
                     .accessibilityIdentifier("focus_\(item.rawValue.lowercased())")
                 }
@@ -559,7 +559,7 @@ struct CookModeView: View {
                 .padding(.horizontal, 22)
                 .frame(minHeight: tight ? 48 : 52)
         }
-        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: .white))
+        .buttonStyle(SoftButtonStyle(fill: Theme.pill, foreground: Theme.onPill))
         .accessibilityIdentifier("startStepTimer")
     }
 
@@ -718,7 +718,7 @@ struct CookModeView: View {
                         .labelStyle(TrailingIconLabelStyle())
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
-                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
+                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: Theme.onAccent))
                 .accessibilityIdentifier("finishCooking")
             } else {
                 Button {
@@ -728,7 +728,7 @@ struct CookModeView: View {
                         .labelStyle(TrailingIconLabelStyle())
                         .frame(maxWidth: .infinity, minHeight: height)
                 }
-                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
+                .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: Theme.onAccent))
                 .accessibilityIdentifier("nextStep")
             }
         }
@@ -750,7 +750,7 @@ struct CookModeView: View {
             } label: {
                 Text("Done").font(Theme.text(22, bold: true)).frame(maxWidth: 240, minHeight: 60)
             }
-            .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: .white))
+            .buttonStyle(SoftButtonStyle(fill: Theme.accent, foreground: Theme.onAccent))
             .accessibilityIdentifier("doneCooking")
             Button("Back to steps") {
                 withAnimation { finished = false }
