@@ -105,6 +105,10 @@ final class CountertopCookUITests: XCTestCase {
         element("startCooking").tap()
         XCTAssertTrue(element("stepText").waitForExistence(timeout: 5))
         waitForCookModeToSettle()
+        // Cook Mode follows too: the step on espresso, not the daytime cream.
+        let step = element("stepText").frame
+        let cook = screenshot()
+        expectColour(cook, at: CGPoint(x: step.minX - 6, y: step.midY), is: 0x1C1712, "dark Cook Mode", tolerance: 14)
         snapshot("dark-cook-mode")
         element("exitCook").tap()
         XCTAssertTrue(element("startCooking").waitForExistence(timeout: 5))

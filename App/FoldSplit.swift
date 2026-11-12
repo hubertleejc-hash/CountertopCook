@@ -133,7 +133,6 @@ final class FoldSplitController: UIViewController {
         super.viewDidLoad()
         // Two tones under the panes, as in reference-design.png: pale recipe half, warm timers
         // half, meeting at the hinge's centre line. Panes and hinge are clear; no divider.
-        overrideUserInterfaceStyle = .light
         view.backgroundColor = Theme.timersSideUI
         recipeSide.backgroundColor = Theme.recipeSideUI
         recipeSide.isUserInteractionEnabled = false

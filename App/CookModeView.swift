@@ -138,7 +138,6 @@ struct CookModeView: View {
             }
         }
         .background((pose == .plain ? Theme.background : Color(Theme.recipeSideUI)).ignoresSafeArea())
-        .environment(\.colorScheme, .light)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .alert("Timer done", isPresented: Binding(
@@ -175,8 +174,7 @@ struct CookModeView: View {
                                        short: pane.size.height < Self.shortPaneHeight)
                         }
                     }
-                    .environment(timers)
-                    .environment(\.colorScheme, .light),
+                    .environment(timers),
                     secondary: GeometryReader { pane in
                         if pose == .tabletop {
                             deckPane(margin: margin)
@@ -192,8 +190,7 @@ struct CookModeView: View {
                                        outer: pose == .book ? Self.bookOuterMargin : 0)
                         }
                     }
-                    .environment(timers)
-                    .environment(\.colorScheme, .light),
+                    .environment(timers),
                     bookFold: pose == .book,
                     onHingeAxis: { hingeVertical = $0 }
                 )
