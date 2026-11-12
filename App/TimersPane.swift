@@ -126,7 +126,11 @@ struct TimersPane: View {
     private var customTimer: some View {
         HStack(spacing: 8) {
             TextField("Name (optional)", text: $name)
-                .textFieldStyle(.roundedBorder)
+                // A card-coloured field, not the system's (pure black at night).
+                .padding(.horizontal, 10)
+                .frame(minHeight: 36)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.line, lineWidth: 1))
                 .submitLabel(.done)
                 .focused($nameFocused)
                 .accessibilityIdentifier("timerName")
