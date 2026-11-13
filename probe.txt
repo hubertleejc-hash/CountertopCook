@@ -1,0 +1,27 @@
+== Xcode
+/Applications/Xcode_26.6.0.app/Contents/Developer
+Xcode 26.6
+Build version 17F113
+
+== iOS SDKs
+iOS SDKs:
+	iOS 26.5                      	-sdk iphoneos26.5
+iOS Simulator SDKs:
+	Simulator - iOS 26.5          	-sdk iphonesimulator26.5
+
+== iOS simulator runtimes
+iOS 26.2 (26.2 - 23C54) - com.apple.CoreSimulator.SimRuntime.iOS-26-2
+iOS 26.4 (26.4.1 - 23E254a) - com.apple.CoreSimulator.SimRuntime.iOS-26-4
+iOS 26.5 (26.5 - 23F77) - com.apple.CoreSimulator.SimRuntime.iOS-26-5
+
+== iPhone Duo device type
+NO: no 'iPhone Duo' device type in this Xcode
+Other Duo / Fold device types:
+(none)
+
+== Existing iPhone Duo simulators
+(none)
+
+== Fold-related symbols in /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk
+-- SwiftUI
+-- UIKit
