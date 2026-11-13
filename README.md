@@ -22,6 +22,13 @@ Local only: no account, no server, no AI. All text is English.
   - **+ → Import from a link.** A recipe page's link: only its schema.org Recipe data is read, never the story text.
   - A YouTube link, or Share → Hearth from the YouTube app: the video's title and description
     (and captions, when YouTube serves them).
+  - A TikTok, Instagram, Facebook, Pinterest or other video or post link: the post's caption.
+    Emoji headings and bullets ("📝 INGREDIENTS 👇", "🧄 2 cloves garlic", "1️⃣ Boil…") and
+    hashtags are handled. A video that only *says* the recipe can't be read from its link.
+  - **+ → Import from photos / Scan a recipe page.** A cookbook page, a recipe card, a handwritten
+    note, or screenshots of the recipe from a video. The text is read on the phone (Apple's Vision
+    text recognition; two-column cards are read column by column). Several photos make one
+    recipe, in the order picked. Share → Hearth from Photos does the same.
   - Pasted text: an Ingredients list and a Method / Instructions list.
   - Every import opens a review screen first. Nothing is invented: an amount, a time or a serving
     count the source doesn't give is left blank and listed as "not in the source".

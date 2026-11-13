@@ -174,3 +174,70 @@ import Testing
         #expect(combined.map(\.text) == ["salt", "1 tsp salt", "2 ribeye steaks"])
     }
 }
+
+@Suite struct VideoCaptionTests {
+    /// The way recipe videos write their captions: emoji headings and bullets, keycap step
+    /// numbers, hashtags at the end.
+    static let caption = """
+    Creamy garlic butter noodles 🍜✨
+
+    📝 INGREDIENTS 👇
+    🧄 4 cloves garlic, minced
+    🧈 2 tbsp butter
+    🍝 200g noodles
+
+    👩‍🍳 Instructions:
+    1️⃣ Boil the noodles for 8 minutes.
+    2️⃣ Melt the butter and fry the garlic.
+    3️⃣ Toss together.
+
+    #noodles #easyrecipe @hearth
+    """
+
+    @Test func emojiHeadingsBulletsAndKeycaps() {
+        let recipe = TextRecipeParser.parse(Self.caption)
+        #expect(recipe.title == "Creamy garlic butter noodles 🍜✨")
+        #expect(recipe.ingredients == [
+            .init(amount: "4", unit: "cloves", name: "garlic, minced"),
+            .init(amount: "2", unit: "tbsp", name: "butter"),
+            .init(amount: "200", unit: "g", name: "noodles"),
+        ])
+        #expect(recipe.steps == ["Boil the noodles for 8 minutes.", "Melt the butter and fry the garlic.", "Toss together."])
+    }
+
+    @Test func headingVariants() {
+        let recipe = TextRecipeParser.parse("Toast\nIngredients for 2 people:\n2 slices bread\n~ How to make it ~\nToast the bread.")
+        #expect(recipe.ingredients == [.init(amount: "2", unit: "slices", name: "bread")])
+        #expect(recipe.steps == ["Toast the bread."])
+    }
+
+    @Test func tikTokCaptionFromPageData() {
+        let html = #"""
+        <html><head><meta property="og:title" content="Garlic noodles | TikTok"><meta property="og:description" content="Creamy garlic butter noodles…"></head>
+        <body><script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{"itemInfo":{"itemStruct":{"desc":"Garlic noodles\nIngredients:\n2 tbsp butter\n4 cloves garlic\nMethod:\n1. Fry the garlic in the butter.\n#noodles"}}}</script></body></html>
+        """#
+        let info = PageCaption.extract(html: html, page: URL(string: "https://www.tiktok.com/@cook/video/123"))
+        #expect(info.title == "Garlic noodles | TikTok")
+        let recipe = TextRecipeParser.parse(info.text ?? "")
+        #expect(recipe.title == "Garlic noodles")
+        #expect(recipe.ingredients.map(\.name) == ["butter", "garlic"])
+        #expect(recipe.steps == ["Fry the garlic in the butter."])
+    }
+
+    @Test func instagramDescriptionKeepsOnlyTheCaption() {
+        let html = #"""
+        <meta property="og:description" content="1,234 likes, 56 comments - hearthcook on March 3, 2025: &quot;Let&#039;s cook pesto&#x0a;Ingredients&#x0a;2 cups basil&#x0a;Method&#x0a;1. Blend it.&quot;. " />
+        """#
+        let info = PageCaption.extract(html: html, page: URL(string: "https://www.instagram.com/reel/abc/"))
+        #expect(info.text == "Let's cook pesto\nIngredients\n2 cups basil\nMethod\n1. Blend it.")
+        let recipe = TextRecipeParser.parse(info.text ?? "")
+        #expect(recipe.title == "Let's cook pesto")
+        #expect(recipe.ingredients == [.init(amount: "2", unit: "cup", name: "basil")])
+        #expect(recipe.steps == ["Blend it."])
+    }
+
+    @Test func pageDataIsOnlyReadOnVideoSites() {
+        let html = #"<script>{"desc":"Ingredients\n1 cup sugar"}</script>"#
+        #expect(PageCaption.extract(html: html, page: URL(string: "https://example.com/post")).text == nil)
+    }
+}

@@ -27,12 +27,15 @@ struct RecipeListView: View {
         /// Import from a link; `start` fetches it straight away (a share from another app).
         case link(String, start: Bool)
         case paste(String)
+        /// Import from photos or screenshots; `scan` opens the document camera straight away.
+        case photos(scan: Bool)
 
         var id: String {
             switch self {
             case .manual: return "manual"
             case .link(let link, _): return "link-\(link)"
             case .paste: return "paste"
+            case .photos: return "photos"
             }
         }
     }
@@ -110,6 +113,8 @@ struct RecipeListView: View {
                     ImportLinkView(initialLink: link, startNow: start) { open($0) }
                 case .paste(let text):
                     PasteTextView(initialText: text) { open($0) }
+                case .photos(let scan):
+                    PhotoImportView(scanNow: scan) { open($0) }
                 }
             }
         }
@@ -174,6 +179,20 @@ struct RecipeListView: View {
                 Label("Import from a link", systemImage: "link")
             }
             .accessibilityIdentifier("menuImportLink")
+            Button {
+                sheet = .photos(scan: false)
+            } label: {
+                Label("Import from photos", systemImage: "photo.on.rectangle.angled")
+            }
+            .accessibilityIdentifier("menuImportPhotos")
+            if DocumentScanner.isSupported {
+                Button {
+                    sheet = .photos(scan: true)
+                } label: {
+                    Label("Scan a recipe page", systemImage: "doc.viewfinder")
+                }
+                .accessibilityIdentifier("menuScanPage")
+            }
             Button {
                 sheet = .paste("")
             } label: {
@@ -282,8 +301,10 @@ struct RecipeListView: View {
             sheet = .link(address, start: true)
         } else if let text = items.first(where: { $0.name == "text" })?.value, !text.isEmpty {
             // Shared text that is really a link ("Watch this https://youtu.be/…") is fetched;
-            // anything else goes to the paste screen, ready to read.
-            if text.count < 400, text.range(of: #"https?://\S+"#, options: .regularExpression) != nil {
+            // anything else (and the text read from a shared photo) goes to the paste screen,
+            // ready to check and read.
+            let fromPhoto = items.first(where: { $0.name == "source" })?.value == "photo"
+            if !fromPhoto, text.count < 400, text.range(of: #"https?://\S+"#, options: .regularExpression) != nil {
                 sheet = .link(text, start: true)
             } else {
                 sheet = .paste(text)
@@ -395,7 +416,7 @@ struct BookCover: View {
     }
 }
 
-/// Import from a link: a recipe page or a YouTube video. The review screen opens in this sheet.
+/// Import from a link: a recipe page, or a video (YouTube, TikTok, Instagram, Facebook…). The review screen opens in this sheet.
 struct ImportLinkView: View {
     let startNow: Bool
     let onSaved: (Recipe) -> Void
@@ -418,7 +439,7 @@ struct ImportLinkView: View {
             NavigationStack {
                 Form {
                     Section {
-                        TextField("Paste a recipe or YouTube link", text: $link)
+                        TextField("Paste a recipe or video link", text: $link)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -439,7 +460,7 @@ struct ImportLinkView: View {
                     } header: {
                         Text("Link")
                     } footer: {
-                        Text("You review every import before it is saved. From YouTube or any other app, you can also use Share and choose Hearth.")
+                        Text("A recipe page, or a video from YouTube, TikTok, Instagram or Facebook whose description or caption gives the recipe. You review every import before it is saved. From any app, you can also use Share and choose Hearth.")
                     }.warmRows()
                     Section {
                         Button(action: startImport) {

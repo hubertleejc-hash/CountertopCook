@@ -77,7 +77,7 @@ public enum RecipeImporter {
 
     /// The recipe's photo: schema.org image (a link, a list of links, or ImageObjects with a
     /// url), resolved against the page; else the page's og:image. Only http(s) links count.
-    static func imageURL(_ value: Any?, html: String, page: URL?) -> URL? {
+    public static func imageURL(_ value: Any?, html: String, page: URL?) -> URL? {
         func links(_ value: Any?) -> [String] {
             if let text = value as? String { return [text] }
             if let array = value as? [Any] { return array.flatMap(links) }
@@ -223,7 +223,7 @@ public enum RecipeImporter {
         return host
     }
 
-    private static func metaContent(_ property: String, in html: String) -> String? {
+    static func metaContent(_ property: String, in html: String) -> String? {
         let p = NSRegularExpression.escapedPattern(for: property)
         let patterns = [
             #"<meta\b[^>]*\b(?:property|name)\s*=\s*["']"# + p + #"["'][^>]*\bcontent\s*=\s*["']([^"']*)["']"#,
@@ -253,7 +253,7 @@ public enum RecipeImporter {
         "frac14": "¼", "frac34": "¾", "frac13": "⅓", "frac23": "⅔", "times": "×", "eacute": "é", "egrave": "è",
     ]
 
-    private static func decodeEntities(_ text: String) -> String {
+    static func decodeEntities(_ text: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: #"&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]*);"#)
         else { return text }
         var result = ""

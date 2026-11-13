@@ -59,11 +59,13 @@ public enum StepTime {
 public enum TextRecipeParser {
     private enum Section { case preamble, ingredients, method, other }
 
-    private static let ingredientHeadings = ["ingredients", "ingredient list", "what you need", "what you'll need",
-                                             "what you’ll need", "you will need", "you'll need", "you’ll need",
-                                             "shopping list"]
-    private static let methodHeadings = ["method", "instructions", "directions", "steps", "preparation",
-                                         "how to make it", "how to make", "procedure", "recipe steps"]
+    private static let ingredientHeadings = ["ingredients", "ingredient", "ingredient list", "ingredients list",
+                                             "what you need", "what you'll need", "what you’ll need", "you will need",
+                                             "you'll need", "you’ll need", "shopping list", "ingredients needed"]
+    private static let methodHeadings = ["method", "instructions", "instruction", "directions", "steps", "preparation",
+                                         "how to make it", "how to make", "how to cook", "how to cook it", "procedure",
+                                         "recipe steps", "cooking steps", "cooking instructions", "cooking method",
+                                         "steps to make", "to make"]
     private static let otherHeadings = ["notes", "note", "tips", "tip", "nutrition", "nutrition facts", "equipment",
                                         "storage", "faq", "video", "chapters", "timestamps", "follow me", "music",
                                         "links", "subscribe", "social", "credits"]
@@ -75,8 +77,12 @@ public enum TextRecipeParser {
     /// "Total time: 45 min"). Anything the text doesn't give stays empty or nil.
     public static func parse(_ text: String) -> ImportedRecipe {
         let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            // Video captions number their steps with keycap emoji: "1️⃣ Boil the pasta" → "1. Boil the pasta".
+            .replacingOccurrences(of: "([0-9])\u{FE0F}?\u{20E3}", with: "$1. ", options: .regularExpression)
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
+            // Hashtag and @mention lines at the end of a caption are not part of the recipe.
+            .filter { !isTagLine($0) }
 
         var title = ""
         var servings: Int?
@@ -145,15 +151,34 @@ public enum TextRecipeParser {
 
     private static func heading(_ line: String) -> Section? {
         guard line.count <= 48 else { return nil }
-        var text = line.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "#*_=-–—:•▢ \t"))
-        // "Ingredients (serves 4)" or "Method:" still count.
-        if let cut = text.firstIndex(where: { $0 == "(" || $0 == ":" }) { text = String(text[..<cut]) }
-        text = text.trimmingCharacters(in: .whitespaces)
-        if text.hasPrefix("for the ") || text.hasPrefix("the ") { return nil }
-        if ingredientHeadings.contains(text) { return .ingredients }
-        if methodHeadings.contains(text) { return .method }
-        if otherHeadings.contains(text) { return .other }
+        // Emoji and decoration around a heading ("📝 INGREDIENTS 👇", "~ Method ~") don't matter.
+        var text = Substring(line.lowercased())
+        text = text.drop { !$0.isLetter }
+        // "Ingredients (serves 4)", "Method:" or "Ingredients - for 2" still count.
+        if let cut = text.range(of: #"\s*(?:\(|:|：|\s[-–—]\s)"#, options: .regularExpression) {
+            text = text[..<cut.lowerBound]
+        }
+        while let last = text.last, !last.isLetter { text = text.dropLast() }
+        let words = text.split(whereSeparator: { $0.isWhitespace })
+        // "Ingredients for 4 people" or "Ingredients for the sauce" is the ingredients heading too.
+        if let first = words.first, words.count > 1, words[1] == "for", ingredientHeadings.contains(String(first)) {
+            return .ingredients
+        }
+        text = Substring(words.joined(separator: " "))
+        let lower = String(text)
+        guard !lower.isEmpty else { return nil }
+        if lower.hasPrefix("for the ") || lower.hasPrefix("the ") { return nil }
+        if ingredientHeadings.contains(lower) { return .ingredients }
+        if methodHeadings.contains(lower) { return .method }
+        if otherHeadings.contains(lower) { return .other }
         return nil
+    }
+
+    /// A line made only of hashtags and @mentions ("#pasta #dinner @hearth").
+    static func isTagLine(_ line: String) -> Bool {
+        let words = line.split(whereSeparator: { $0.isWhitespace })
+        return !words.isEmpty && words.allSatisfy { $0.hasPrefix("#") || $0.hasPrefix("@") }
+            && words.contains { $0.count > 1 }
     }
 
     private static func titleCandidate(_ line: String) -> String? {
@@ -165,9 +190,14 @@ public enum TextRecipeParser {
         return text
     }
 
+    /// Takes off a list bullet, a checkbox, or the emoji many captions put in front of each item
+    /// ("🧄 2 cloves garlic", "✅ Boil the pasta").
     private static func stripBullet(_ line: String) -> String {
-        line.replacingOccurrences(of: #"^(?:[-*•▢▪◦·–—]|\[\s?\]|□)\s*"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespaces)
+        let text = line.replacingOccurrences(of: #"^(?:[-*•▢▪◦·–—]|\[\s?\]|□)\s*"#, with: "", options: .regularExpression)
+        let rest = text.drop { character in
+            !(character.isLetter || character.isNumber || "([\"'“‘".contains(character))
+        }
+        return String(rest).trimmingCharacters(in: .whitespaces)
     }
 
     private static func stripNumber(_ line: String) -> String {
@@ -206,6 +236,10 @@ public enum YouTubePage {
         public var description: String?
         /// Where the video's captions can be fetched, when the page lists a caption track.
         public var captionURL: URL?
+
+        public init(title: String? = nil, channel: String? = nil, description: String? = nil, captionURL: URL? = nil) {
+            self.title = title; self.channel = channel; self.description = description; self.captionURL = captionURL
+        }
     }
 
     /// The video id in a YouTube link: youtu.be/ID, youtube.com/watch?v=ID, /shorts/ID, /embed/ID, /live/ID.
@@ -286,6 +320,99 @@ public enum YouTubePage {
             let range = Range(match.range(at: 1), in: html) else { return nil }
         let value = RecipeImporter.clean(String(html[range]))
         return value.isEmpty ? nil : value
+    }
+}
+
+// MARK: - Video and post captions
+
+/// The caption of a video or post on a page with no recipe card: TikTok, Instagram, Facebook,
+/// Pinterest, Xiaohongshu and the like. Many recipe videos write the recipe there. Only the
+/// caption is read (the page's own description of the post), never comments or other text.
+public enum PageCaption {
+    public struct Info: Equatable {
+        public var title: String?
+        /// The caption, line breaks kept so its lists can be read.
+        public var text: String?
+        public var siteName: String?
+    }
+
+    /// `page` is the address the page came from: TikTok's and Instagram's own page data is
+    /// only looked at on their own sites.
+    public static func extract(html: String, page: URL? = nil) -> Info {
+        var candidates: [String] = []
+        let host = page?.host?.lowercased() ?? ""
+        if host.contains("tiktok.") || host.contains("instagram.") {
+            // The page data carries the full caption; the meta description is often cut short.
+            for key in [#""desc":""#, #""caption":\{"text":""#, #""edge_media_to_caption":\{"edges":\[\{"node":\{"text":""#] {
+                if let value = jsonString(after: key, in: html) { candidates.append(value) }
+            }
+        }
+        for property in ["og:description", "twitter:description", "description"] {
+            if let value = meta(property, in: html) { candidates.append(value) }
+        }
+        let texts = candidates.map { withoutPostPreamble(keepingLines($0)) }.filter { !$0.isEmpty }
+        // The longest is the fullest copy of the caption.
+        let text = texts.max { $0.count < $1.count }
+        let title = (meta("og:title", in: html) ?? meta("twitter:title", in: html))
+            .map(RecipeImporter.clean).flatMap { $0.isEmpty ? nil : $0 }
+        let site = meta("og:site_name", in: html).map(RecipeImporter.clean).flatMap { $0.isEmpty ? nil : $0 }
+        return Info(title: title, text: text, siteName: site)
+    }
+
+    /// Tags stripped and entities decoded like `RecipeImporter.clean`, but line breaks kept.
+    static func keepingLines(_ text: String) -> String {
+        var result = text.replacingOccurrences(of: #"(?i)<br\s*/?>|</p\s*>|</li\s*>"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+        for _ in 0..<2 where result.contains("&") { result = RecipeImporter.decodeEntities(result) }
+        return result.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: .newlines)
+            .map { $0.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\u{00A0}" }).joined(separator: " ") }
+            .joined(separator: "\n")
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Instagram's description reads `123 likes, 4 comments - cook on May 1, 2025: "the caption"`;
+    /// only the caption is kept.
+    static func withoutPostPreamble(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"^[\d.,KkMm]+\s+likes?,\s*[\d.,KkMm]+\s+comments?\s*[-–]\s*.{1,80}?\s+on\s+[^:\n]{3,40}:\s*["“](.*?)["”]\.?\s*$"#,
+            options: [.dotMatchesLineSeparators]),
+            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+            let range = Range(match.range(at: 1), in: text) else { return text }
+        return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A meta tag's content, either attribute order, in double or single quotes; an apostrophe
+    /// inside a double-quoted caption ("Let's cook") doesn't end it.
+    static func meta(_ property: String, in html: String) -> String? {
+        let p = NSRegularExpression.escapedPattern(for: property)
+        let name = #"\b(?:property|name)\s*=\s*["']"# + p + #"["']"#
+        let content = #"\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)')"#
+        for pattern in [#"<meta\b[^>]*"# + name + #"[^>]*"# + content, #"<meta\b[^>]*"# + content + #"[^>]*"# + name] {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+                  let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)) else { continue }
+            for group in [1, 2] {
+                if let range = Range(match.range(at: group), in: html) {
+                    let value = String(html[range])
+                    return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func jsonString(after prefix: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: prefix + #"((?:[^"\\]|\\.)*)""#) else { return nil }
+        var best: String?
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range(at: 1), in: text) else { continue }
+            let literal = "\"" + text[range] + "\""
+            if let value = try? JSONSerialization.jsonObject(with: Data(literal.utf8), options: [.fragmentsAllowed]) as? String,
+               value.count > (best?.count ?? 0) {
+                best = value
+            }
+        }
+        return best
     }
 }
 

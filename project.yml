@@ -30,6 +30,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Config/App-Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Hearth
+        # Scan a recipe page (VisionKit's document camera).
+        INFOPLIST_KEY_NSCameraUsageDescription: Hearth uses the camera to scan a recipe page and read its text.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -43,7 +45,8 @@ targets:
   HearthShare:
     type: app-extension
     platform: iOS
-    sources: [ShareExtension]
+    # PhotoText reads the text of a shared screenshot or photo, as the app's photo import does.
+    sources: [ShareExtension, App/PhotoText.swift]
     info:
       path: ShareExtension/Info.plist
       properties:
@@ -55,6 +58,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsImageWithMaxCount: 10
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hubertlee.countertopcook.share
