@@ -1,0 +1,7 @@
+FOLD: expected fullyOpen, app reports fullyOpen
+FOLD: pose=open foldState=fullyOpen window=(0.0, -5.684341886080802e-14, 951.0, 669.0) hinge=(455.5, -5.684341886080802e-14, 40.0, 669.0) region=active=false axis=vertical region=455,0,40,669 primaryHidden=false secondaryHidden=false splitAxis=horizontal fold=none
+CARDS: unfolded-open-step1 recipe=(111.75, 19.999999999999943, 315.9166564941406, 595.0) timers=(523.6666870117188, 27.999999999999943, 315.33331298828125, 579.0)
+CARDS: unfolded-open-step2 recipe=(111.75, 19.999999999999943, 315.9166564941406, 595.0) timers=(523.6666870117188, 27.999999999999943, 315.33331298828125, 579.0)
+POSE: turned open hinge: wanted openPortrait, app reports openLandscape, window=(0.0, -5.684341886080802e-14, 951.0, 669.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (137.402 seconds).
+** TEST EXECUTE SUCCEEDED **

@@ -1,0 +1,8 @@
+FOLD: expected partiallyOpen, app reports partiallyOpen
+FOLD: pose=partial foldState=partiallyOpen window=(0.0, -5.684341886080802e-14, 951.0, 669.0) hinge=(455.5, -5.684341886080802e-14, 40.0, 669.0) region=active=true axis=vertical region=455,0,40,669 primaryHidden=false secondaryHidden=false splitAxis=horizontal fold=book
+CARDS: unfolded-partial-step1 recipe=(120.08333587646484, 25.999999999999943, 287.5833435058594, 583.0) timers=(543.6666870117188, 33.99999999999994, 287.33331298828125, 567.0)
+POSE: book margins beside the spine 47.83332061767578 and 48.16668701171875; pages 287.5833435058594 and 287.33331298828125
+CARDS: unfolded-partial-step2 recipe=(120.08333587646484, 25.999999999999943, 287.5833435058594, 583.0) timers=(543.6666870117188, 33.99999999999994, 287.33331298828125, 567.0)
+POSE: turned partial hinge: wanted tabletop, app reports book, window=(0.0, -5.684341886080802e-14, 951.0, 669.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (153.975 seconds).
+** TEST EXECUTE SUCCEEDED **

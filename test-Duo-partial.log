@@ -1,0 +1,621 @@
+Command line invocation:
+    /Applications/Xcode_27.1.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project /Users/runner/work/CountertopCook/CountertopCook/CountertopCook.xcodeproj -scheme CountertopCook -destination "platform=iOS Simulator,OS=27.1,name=iPhone Duo" -derivedDataPath /Users/runner/work/CountertopCook/CountertopCook/build/DerivedData -resultBundlePath /Users/runner/work/CountertopCook/CountertopCook/ci-output/Duo-partial.xcresult -retry-tests-on-failure -test-iterations 3 "-only-testing:CountertopCookUITests/CountertopCookUITests/testLayoutKeepsTimersVisibleAndCentreLineClear"
+
+Retrying tests on failure. Running tests repeatedly up to 3 times.
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  CookCore: /Users/runner/work/CountertopCook/CountertopCook/CookCore
+
+Writing result bundle at path:
+	/Users/runner/work/CountertopCook/CountertopCook/ci-output/Duo-partial.xcresult
+
+2026-11-13 18:17:10.843 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:17:10.844 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:17:13.416116+0000 CountertopCookUITests-Runner[80442:206222] [Default] Running tests...
+    t =      nans Interface orientation changed to Landscape Left
+Test Suite 'Selected tests' started at 2026-11-13 18:17:17.994.
+Test Suite 'CountertopCookUITests.xctest' started at 2026-11-13 18:17:17.995.
+Test Suite 'CountertopCookUITests' started at 2026-11-13 18:17:17.995.
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' started (Iteration 1 of 3).
+    t =     0.00s Start Test at 2026-11-13 18:17:17.998
+    t =     0.04s Set Up
+    t =     0.04s     Setting device orientation to Portrait
+    t =     0.08s         Wait for com.apple.springboard to idle
+2026-11-13 18:17:18.282 xcodebuild[79770:204583] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-13 18:17:18.282 xcodebuild[79770:204583] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.10s     Open com.hubertlee.countertopcook
+    t =     0.10s         Launch com.hubertlee.countertopcook
+2026-11-13 18:17:18.413 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:17:18.414 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+    t =     2.76s             Setting up automation session
+objc[80442]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.94425.0.mmVg8A/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x1023c8310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.94425.0.mmVg8A/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x103354398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     7.76s             Wait for com.hubertlee.countertopcook to idle
+    t =    10.37s Waiting 5.0s for "recipeRow_Pan-Seared Steak" Any to exist
+    t =    11.41s     Checking `Expect predicate `existsNoRetry == 1` for object "recipeRow_Pan-Seared Steak" Any`
+    t =    11.41s         Checking existence of `"recipeRow_Pan-Seared Steak" Any`
+    t =    12.36s Checking existence of `"recipeRow_Pan-Seared Steak" Any`
+    t =    12.72s Find the "recipeRow_Pan-Seared Steak" Any
+    t =    13.14s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    13.45s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    13.70s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    13.91s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    14.14s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    14.35s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    14.60s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    14.76s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    14.99s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    15.26s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    15.51s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    15.74s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    16.02s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    16.29s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    16.53s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    16.73s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    17.00s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    17.21s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    17.44s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    17.65s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    17.87s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    18.10s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    18.38s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    18.59s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    18.83s Checking existence of `"recipeRow_Pan-Seared Steak" Button`
+    t =    19.05s Find the "recipeRow_Pan-Seared Steak" Button
+    t =    19.30s Tap "recipeRow_Pan-Seared Steak" Button
+    t =    19.30s     Wait for com.hubertlee.countertopcook to idle
+    t =    19.31s     Find the "recipeRow_Pan-Seared Steak" Button
+    t =    19.52s     Check for interrupting elements affecting "recipeRow_Pan-Seared Steak" Button
+    t =    19.61s         Wait for com.apple.springboard to idle
+    t =    19.79s     Synthesize event
+    t =    20.12s     Wait for com.hubertlee.countertopcook to idle
+    t =    20.69s Waiting 5.0s for "startCooking" Any to exist
+    t =    21.73s     Checking `Expect predicate `existsNoRetry == 1` for object "startCooking" Any`
+    t =    21.73s         Checking existence of `"startCooking" Any`
+    t =    22.02s Tap "startCooking" Any
+    t =    22.02s     Wait for com.hubertlee.countertopcook to idle
+    t =    22.03s     Find the "startCooking" Any
+    t =    22.26s     Check for interrupting elements affecting "startCooking" Button
+    t =    22.51s         Wait for com.apple.springboard to idle
+    t =    22.70s     Synthesize event
+    t =    23.04s     Wait for com.hubertlee.countertopcook to idle
+    t =    23.44s Waiting 5.0s for "stepText" Any to exist
+    t =    24.54s     Checking `Expect predicate `existsNoRetry == 1` for object "stepText" Any`
+    t =    24.54s         Checking existence of `"stepText" Any`
+    t =    25.27s Find the "exitCook" Any
+    t =    25.76s Find the "exitCook" Button
+    t =    25.98s Find the "exitCook" Button
+    t =    26.79s Checking existence of `"focus_timers" Any`
+    t =    27.83s Tap "preset_15" Any
+    t =    27.83s     Wait for com.hubertlee.countertopcook to idle
+    t =    27.84s     Find the "preset_15" Any
+    t =    28.14s     Check for interrupting elements affecting "preset_15" Button
+    t =    28.32s         Wait for com.apple.springboard to idle
+    t =    28.54s     Synthesize event
+    t =    28.92s     Wait for com.hubertlee.countertopcook to idle
+    t =    28.94s Tap "preset_30" Any
+    t =    28.94s     Wait for com.hubertlee.countertopcook to idle
+    t =    28.96s     Find the "preset_30" Any
+    t =    29.36s     Check for interrupting elements affecting "preset_30" Button
+    t =    29.48s         Wait for com.apple.springboard to idle
+    t =    29.62s     Synthesize event
+    t =    29.95s     Wait for com.hubertlee.countertopcook to idle
+    t =    29.96s Checking existence of `"focus_step" Any`
+    t =    31.26s Waiting 5.0s for "foldState" Any to exist
+    t =    32.26s     Checking `Expect predicate `existsNoRetry == 1` for object "foldState" Any`
+    t =    32.26s         Checking existence of `"foldState" Any`
+    t =    33.40s Find the "foldState" Any
+    t =    33.56s Find the "foldState" Other
+FOLD: expected partiallyOpen, app reports partiallyOpen
+    t =    33.64s Waiting 5.0s for "hingeGap" Any to exist
+    t =    34.65s     Checking `Expect predicate `existsNoRetry == 1` for object "hingeGap" Any`
+    t =    34.65s         Checking existence of `"hingeGap" Any`
+    t =    35.72s Find the Window (First Match)
+    t =    35.76s Find the "foldState" Any
+    t =    35.97s Find the "hingeGap" Any
+    t =    36.06s Find the "hingeGap" Other
+FOLD: pose=partial foldState=partiallyOpen window=(0.0, -5.684341886080802e-14, 951.0, 669.0) hinge=(455.5, -5.684341886080802e-14, 40.0, 669.0) region=active=true axis=vertical region=455,0,40,669 primaryHidden=false secondaryHidden=false splitAxis=horizontal fold=book
+    t =    36.12s Find the "hingeGap" Other
+    t =    36.23s Find the "hingeGap" Other
+    t =    37.36s Find the "cookPose" Any
+    t =    37.41s Find the "cookPose" Any
+    t =    37.46s Find the "hingeGap" Other
+    t =    39.54s Added attachment named 'unfolded-partial-step1'
+    t =    39.54s Find the Window (First Match)
+    t =    39.58s Checking existence of `"nextStep" Any`
+    t =    39.89s Checking existence of `"focus_timers" Any`
+    t =    41.20s Waiting 3.0s for "exitCook" Any to exist
+    t =    42.26s     Checking `Expect predicate `existsNoRetry == 1` for object "exitCook" Any`
+    t =    42.26s         Checking existence of `"exitCook" Any`
+    t =    42.45s Find the "exitCook" Any
+    t =    42.64s Find the "exitCook" Button
+    t =    42.80s Find the "exitCook" Button
+    t =    43.04s Waiting 3.0s for "stepProgressLabel" Any to exist
+    t =    44.06s     Checking `Expect predicate `existsNoRetry == 1` for object "stepProgressLabel" Any`
+    t =    44.06s         Checking existence of `"stepProgressLabel" Any`
+    t =    44.34s Find the "stepProgressLabel" Any
+    t =    44.59s Find the "stepProgressLabel" StaticText
+    t =    44.82s Waiting 3.0s for "stepText" Any to exist
+    t =    45.85s     Checking `Expect predicate `existsNoRetry == 1` for object "stepText" Any`
+    t =    45.85s         Checking existence of `"stepText" Any`
+    t =    46.31s Find the "stepText" Any
+    t =    46.85s Find the "stepText" StaticText
+    t =    47.41s Waiting 3.0s for "servingsPlus" Any to exist
+    t =    48.46s     Checking `Expect predicate `existsNoRetry == 1` for object "servingsPlus" Any`
+    t =    48.46s         Checking existence of `"servingsPlus" Any`
+    t =    48.70s Find the "servingsPlus" Any
+    t =    48.90s Find the "servingsPlus" Button
+    t =    49.13s Find the "servingsPlus" Button
+    t =    49.31s Waiting 3.0s for "backStep" Any to exist
+    t =    50.35s     Checking `Expect predicate `existsNoRetry == 1` for object "backStep" Any`
+    t =    50.36s         Checking existence of `"backStep" Any`
+    t =    50.59s Find the "backStep" Any
+    t =    50.80s Find the "backStep" Button
+    t =    51.01s Find the "backStep" Button
+    t =    51.25s Waiting 3.0s for "nextStep" Any to exist
+    t =    52.29s     Checking `Expect predicate `existsNoRetry == 1` for object "nextStep" Any`
+    t =    52.29s         Checking existence of `"nextStep" Any`
+    t =    52.48s Find the "nextStep" Any
+    t =    52.71s Find the "nextStep" Button
+    t =    52.94s Find the "nextStep" Button
+    t =    53.22s Waiting 3.0s for "timersHeader" Any to exist
+    t =    54.26s     Checking `Expect predicate `existsNoRetry == 1` for object "timersHeader" Any`
+    t =    54.26s         Checking existence of `"timersHeader" Any`
+    t =    54.47s Find the "timersHeader" Any
+    t =    54.76s Find the "timersHeader" StaticText
+    t =    55.12s Waiting 3.0s for "preset_5" Any to exist
+    t =    56.16s     Checking `Expect predicate `existsNoRetry == 1` for object "preset_5" Any`
+    t =    56.16s         Checking existence of `"preset_5" Any`
+    t =    56.42s Find the "preset_5" Any
+    t =    56.69s Find the "preset_5" Button
+    t =    57.02s Find the "preset_5" Button
+    t =    57.33s Waiting 3.0s for "timerCountdown_15 min" Any to exist
+    t =    58.35s     Checking `Expect predicate `existsNoRetry == 1` for object "timerCountdown_15 min" Any`
+    t =    58.35s         Checking existence of `"timerCountdown_15 min" Any`
+    t =    59.26s Find the "timerCountdown_15 min" Any
+    t =    59.93s Find the "timerCountdown_15 min" StaticText
+    t =    60.58s Waiting 3.0s for "timerCountdown_30 min" Any to exist
+    t =    61.59s     Checking `Expect predicate `existsNoRetry == 1` for object "timerCountdown_30 min" Any`
+    t =    61.59s         Checking existence of `"timerCountdown_30 min" Any`
+    t =    62.52s Find the "timerCountdown_30 min" Any
+    t =    63.30s Find the "timerCountdown_30 min" StaticText
+    t =    64.08s Checking existence of `StatusBar (First Match)`
+    t =    64.15s Find the StatusBar (First Match)
+    t =    64.20s Find the Window (First Match)
+    t =    64.22s Checking existence of `"nextStep" Any`
+    t =    64.40s Find the "exitCook" Any
+    t =    64.55s Find the "stepProgressLabel" Any
+    t =    64.76s Find the "stepText" Any
+    t =    65.39s Find the "servingsPlus" Any
+    t =    65.76s Find the "backStep" Any
+    t =    66.00s Find the "nextStep" Any
+    t =    66.21s Find the "timersHeader" Any
+    t =    66.47s Find the "preset_5" Any
+    t =    66.76s Find the "timerCountdown_15 min" Any
+    t =    67.62s Find the "timerCountdown_30 min" Any
+    t =    68.51s Find the "recipeCard" Any
+    t =    68.67s Find the "timersCard" Any
+CARDS: unfolded-partial-step1 recipe=(120.08333587646484, 25.999999999999943, 287.5833435058594, 583.0) timers=(543.6666870117188, 33.99999999999994, 287.33331298828125, 567.0)
+    t =    68.87s Find the "converterInput" Any
+    t =    69.20s Checking existence of `"converterInput" Any`
+    t =    69.68s Find the "converterResult" Any
+    t =    70.02s Checking existence of `"converterResult" Any`
+    t =    70.26s Find the "converterInput" Any
+    t =    70.46s Checking existence of `"converterPair_Volume" Any`
+    t =    70.69s Find the "converterPair_Volume" Any
+    t =    70.92s Find the "converterPair_Volume" Button
+    t =    71.27s Find the "converterPair_Volume" Button
+    t =    71.47s Checking existence of `"converterPair_Weight" Any`
+    t =    71.75s Find the "converterPair_Weight" Any
+    t =    72.03s Find the "converterPair_Weight" Button
+    t =    72.61s Find the "converterPair_Weight" Button
+    t =    73.16s Checking existence of `"converterPair_Temp" Any`
+    t =    73.93s Find the "converterPair_Temp" Any
+    t =    74.53s Find the "converterPair_Temp" Button
+    t =    75.21s Find the "converterPair_Temp" Button
+    t =    75.65s Find the "backStep" Any
+    t =    76.88s Checking existence of `"ingredient_0" Any`
+    t =    78.16s Find the "ingredient_0" Any
+    t =    78.98s Find the "ingredient_0" Button
+    t =    79.61s Checking existence of `"ingredient_1" Any`
+    t =    80.40s Find the "ingredient_1" Any
+    t =    81.26s Find the "ingredient_1" Button
+    t =    81.98s Get all elements bound by index for: Descendants matching type Button
+    t =    82.18s Checking existence of `Button (Element at index 0)`
+    t =    82.29s Find the Button (Element at index 0)
+    t =    82.42s Checking existence of `Button (Element at index 1)`
+    t =    82.56s Find the Button (Element at index 1)
+    t =    82.72s Find the "exitCook" Button
+    t =    82.91s Checking existence of `Button (Element at index 2)`
+    t =    83.16s Find the Button (Element at index 2)
+    t =    83.39s Find the "servingsMinus" Button
+    t =    83.54s Checking existence of `Button (Element at index 3)`
+    t =    83.69s Find the Button (Element at index 3)
+    t =    83.91s Find the "servingsPlus" Button
+    t =    84.00s Checking existence of `Button (Element at index 4)`
+    t =    84.09s Find the Button (Element at index 4)
+    t =    84.21s Find the "backStep" Button
+    t =    84.29s Checking existence of `Button (Element at index 5)`
+    t =    84.42s Find the Button (Element at index 5)
+    t =    84.65s Find the "nextStep" Button
+    t =    84.79s Checking existence of `Button (Element at index 6)`
+    t =    84.91s Find the Button (Element at index 6)
+    t =    85.10s Find the "preset_1" Button
+    t =    85.20s Checking existence of `Button (Element at index 7)`
+    t =    85.32s Find the Button (Element at index 7)
+    t =    85.50s Find the "preset_5" Button
+    t =    85.66s Checking existence of `Button (Element at index 8)`
+    t =    85.75s Find the Button (Element at index 8)
+    t =    85.88s Find the "preset_10" Button
+    t =    86.03s Checking existence of `Button (Element at index 9)`
+    t =    86.13s Find the Button (Element at index 9)
+    t =    86.32s Find the "preset_15" Button
+    t =    86.45s Checking existence of `Button (Element at index 10)`
+    t =    86.55s Find the Button (Element at index 10)
+    t =    86.69s Find the "preset_30" Button
+    t =    86.84s Checking existence of `Button (Element at index 11)`
+    t =    87.00s Find the Button (Element at index 11)
+    t =    87.15s Find the "converterPair_Volume" Button
+    t =    87.25s Checking existence of `Button (Element at index 12)`
+    t =    87.37s Find the Button (Element at index 12)
+    t =    87.50s Find the "converterPair_Weight" Button
+    t =    87.58s Checking existence of `Button (Element at index 13)`
+    t =    87.64s Find the Button (Element at index 13)
+    t =    87.75s Find the "converterPair_Temp" Button
+    t =    87.86s Checking existence of `Button (Element at index 14)`
+    t =    87.95s Find the Button (Element at index 14)
+    t =    88.08s Find the "converterFrom" Button
+    t =    88.14s Checking existence of `Button (Element at index 15)`
+    t =    88.21s Find the Button (Element at index 15)
+    t =    88.30s Find the "arrow.left.arrow.right" Button
+    t =    88.39s Checking existence of `Button (Element at index 16)`
+    t =    88.47s Find the Button (Element at index 16)
+    t =    88.57s Find the "converterTo" Button
+    t =    88.66s Checking existence of `Button (Element at index 17)`
+    t =    88.73s Find the Button (Element at index 17)
+    t =    88.87s Checking existence of `Button (Element at index 18)`
+    t =    88.93s Find the Button (Element at index 18)
+    t =    89.04s Checking existence of `Button (Element at index 19)`
+    t =    89.14s Find the Button (Element at index 19)
+    t =    89.30s Checking existence of `Button (Element at index 20)`
+    t =    89.38s Find the Button (Element at index 20)
+    t =    89.46s Checking existence of `Button (Element at index 21)`
+    t =    89.56s Find the Button (Element at index 21)
+    t =    89.66s Find the "ingredient_0" Button
+    t =    89.77s Checking existence of `Button (Element at index 22)`
+    t =    89.90s Find the Button (Element at index 22)
+    t =    90.02s Find the "ingredient_1" Button
+    t =    90.12s Checking existence of `Button (Element at index 23)`
+    t =    90.22s Find the Button (Element at index 23)
+    t =    90.36s Find the "ingredient_2" Button
+    t =    90.47s Checking existence of `Button (Element at index 24)`
+    t =    90.54s Find the Button (Element at index 24)
+    t =    90.64s Find the "ingredient_3" Button
+    t =    90.73s Checking existence of `Button (Element at index 25)`
+    t =    90.84s Find the Button (Element at index 25)
+    t =    91.00s Checking existence of `Button (Element at index 26)`
+    t =    91.11s Find the Button (Element at index 26)
+    t =    91.22s Checking existence of `Button (Element at index 27)`
+    t =    91.30s Find the Button (Element at index 27)
+    t =    91.44s Checking existence of `Button (Element at index 28)`
+    t =    91.52s Find the Button (Element at index 28)
+    t =    91.69s Find the "startCustomTimer" Button
+    t =    91.79s Checking existence of `Button (Element at index 29)`
+    t =    91.88s Find the Button (Element at index 29)
+    t =    91.98s Find the "timerPause_15 min" Button
+    t =    92.08s Checking existence of `Button (Element at index 30)`
+    t =    92.15s Find the Button (Element at index 30)
+    t =    92.24s Find the "timerAddMinute_15 min" Button
+    t =    92.34s Checking existence of `Button (Element at index 31)`
+    t =    92.42s Find the Button (Element at index 31)
+    t =    92.57s Find the "timerCancel_15 min" Button
+    t =    92.67s Checking existence of `Button (Element at index 32)`
+    t =    92.74s Find the Button (Element at index 32)
+    t =    92.88s Find the "timerPause_30 min" Button
+    t =    92.96s Checking existence of `Button (Element at index 33)`
+    t =    93.05s Find the Button (Element at index 33)
+    t =    93.16s Find the "timerAddMinute_30 min" Button
+    t =    93.26s Checking existence of `Button (Element at index 34)`
+    t =    93.35s Find the Button (Element at index 34)
+    t =    93.49s Find the "timerCancel_30 min" Button
+    t =    93.58s Checking existence of `Button (Element at index 35)`
+    t =    93.65s Find the Button (Element at index 35)
+    t =    93.77s Find the "timerMinutes-Decrement" Button
+    t =    93.86s Checking existence of `Button (Element at index 36)`
+    t =    93.95s Find the Button (Element at index 36)
+    t =    94.10s Find the "timerMinutes-Increment" Button
+    t =    94.26s Checking existence of `Button (Element at index 37)`
+    t =    94.36s Find the Button (Element at index 37)
+    t =    94.47s Checking existence of `Button (Element at index 38)`
+    t =    94.56s Find the Button (Element at index 38)
+    t =    94.67s Find the "hingeGap" Other
+    t =    94.73s Find the "recipeCard" Any
+    t =    94.85s Find the "timersCard" Any
+    t =    94.96s Find the "hingeGap" Other
+    t =    95.00s Find the "hingeGap" Other
+POSE: book margins beside the spine 47.83332061767578 and 48.16668701171875; pages 287.5833435058594 and 287.33331298828125
+    t =    95.64s Added attachment named 'pose-book'
+    t =    95.64s Tap "nextStep" Any
+    t =    95.64s     Wait for com.hubertlee.countertopcook to idle
+    t =    95.65s     Find the "nextStep" Any
+    t =    95.78s     Check for interrupting elements affecting "nextStep" Button
+    t =    95.93s         Wait for com.apple.springboard to idle
+    t =    96.06s     Synthesize event
+    t =    96.40s     Wait for com.hubertlee.countertopcook to idle
+    t =    96.41s Find the "hingeGap" Other
+    t =    97.80s Added attachment named 'unfolded-partial-step2'
+    t =    97.81s Find the Window (First Match)
+    t =    97.84s Checking existence of `"nextStep" Any`
+    t =    98.11s Checking existence of `"focus_timers" Any`
+    t =    98.76s Waiting 3.0s for "exitCook" Any to exist
+    t =    99.76s     Checking `Expect predicate `existsNoRetry == 1` for object "exitCook" Any`
+    t =    99.77s         Checking existence of `"exitCook" Any`
+    t =    99.89s Find the "exitCook" Any
+    t =   100.05s Find the "exitCook" Button
+    t =   100.18s Find the "exitCook" Button
+    t =   100.30s Waiting 3.0s for "stepProgressLabel" Any to exist
+    t =   101.31s     Checking `Expect predicate `existsNoRetry == 1` for object "stepProgressLabel" Any`
+    t =   101.31s         Checking existence of `"stepProgressLabel" Any`
+    t =   101.44s Find the "stepProgressLabel" Any
+    t =   101.56s Find the "stepProgressLabel" StaticText
+    t =   101.67s Waiting 3.0s for "stepText" Any to exist
+    t =   102.73s     Checking `Expect predicate `existsNoRetry == 1` for object "stepText" Any`
+    t =   102.74s         Checking existence of `"stepText" Any`
+    t =   103.09s Find the "stepText" Any
+    t =   103.48s Find the "stepText" StaticText
+    t =   104.02s Waiting 3.0s for "servingsPlus" Any to exist
+    t =   105.09s     Checking `Expect predicate `existsNoRetry == 1` for object "servingsPlus" Any`
+    t =   105.09s         Checking existence of `"servingsPlus" Any`
+    t =   105.27s Find the "servingsPlus" Any
+    t =   105.39s Find the "servingsPlus" Button
+    t =   105.50s Find the "servingsPlus" Button
+    t =   105.68s Waiting 3.0s for "backStep" Any to exist
+    t =   106.73s     Checking `Expect predicate `existsNoRetry == 1` for object "backStep" Any`
+    t =   106.73s         Checking existence of `"backStep" Any`
+    t =   106.89s Find the "backStep" Any
+    t =   107.05s Find the "backStep" Button
+    t =   107.23s Find the "backStep" Button
+    t =   107.42s Waiting 3.0s for "nextStep" Any to exist
+    t =   108.46s     Checking `Expect predicate `existsNoRetry == 1` for object "nextStep" Any`
+    t =   108.46s         Checking existence of `"nextStep" Any`
+    t =   108.59s Find the "nextStep" Any
+    t =   108.72s Find the "nextStep" Button
+    t =   108.87s Find the "nextStep" Button
+    t =   109.02s Waiting 3.0s for "timersHeader" Any to exist
+    t =   110.07s     Checking `Expect predicate `existsNoRetry == 1` for object "timersHeader" Any`
+    t =   110.07s         Checking existence of `"timersHeader" Any`
+    t =   110.23s Find the "timersHeader" Any
+    t =   110.35s Find the "timersHeader" StaticText
+    t =   110.51s Waiting 3.0s for "preset_5" Any to exist
+    t =   111.56s     Checking `Expect predicate `existsNoRetry == 1` for object "preset_5" Any`
+    t =   111.56s         Checking existence of `"preset_5" Any`
+    t =   111.71s Find the "preset_5" Any
+    t =   111.87s Find the "preset_5" Button
+    t =   112.00s Find the "preset_5" Button
+    t =   112.15s Waiting 3.0s for "timerCountdown_15 min" Any to exist
+    t =   113.16s     Checking `Expect predicate `existsNoRetry == 1` for object "timerCountdown_15 min" Any`
+    t =   113.16s         Checking existence of `"timerCountdown_15 min" Any`
+    t =   113.64s Find the "timerCountdown_15 min" Any
+    t =   114.15s Find the "timerCountdown_15 min" StaticText
+    t =   114.66s Waiting 3.0s for "timerCountdown_30 min" Any to exist
+    t =   115.68s     Checking `Expect predicate `existsNoRetry == 1` for object "timerCountdown_30 min" Any`
+    t =   115.68s         Checking existence of `"timerCountdown_30 min" Any`
+    t =   116.14s Find the "timerCountdown_30 min" Any
+    t =   116.68s Find the "timerCountdown_30 min" StaticText
+    t =   117.15s Checking existence of `StatusBar (First Match)`
+    t =   117.20s Find the StatusBar (First Match)
+    t =   117.23s Find the Window (First Match)
+    t =   117.25s Checking existence of `"nextStep" Any`
+    t =   117.39s Find the "exitCook" Any
+    t =   117.51s Find the "stepProgressLabel" Any
+    t =   117.63s Find the "stepText" Any
+    t =   117.98s Find the "servingsPlus" Any
+    t =   118.11s Find the "backStep" Any
+    t =   118.27s Find the "nextStep" Any
+    t =   118.46s Find the "timersHeader" Any
+    t =   118.66s Find the "preset_5" Any
+    t =   118.81s Find the "timerCountdown_15 min" Any
+    t =   119.29s Find the "timerCountdown_30 min" Any
+    t =   119.77s Find the "recipeCard" Any
+    t =   119.87s Find the "timersCard" Any
+CARDS: unfolded-partial-step2 recipe=(120.08333587646484, 25.999999999999943, 287.5833435058594, 583.0) timers=(543.6666870117188, 33.99999999999994, 287.33331298828125, 567.0)
+    t =   119.96s Find the "converterInput" Any
+    t =   120.13s Checking existence of `"converterInput" Any`
+    t =   120.30s Find the "converterResult" Any
+    t =   120.53s Checking existence of `"converterResult" Any`
+    t =   120.71s Find the "converterInput" Any
+    t =   120.88s Checking existence of `"converterPair_Volume" Any`
+    t =   121.02s Find the "converterPair_Volume" Any
+    t =   121.18s Find the "converterPair_Volume" Button
+    t =   121.38s Find the "converterPair_Volume" Button
+    t =   121.58s Checking existence of `"converterPair_Weight" Any`
+    t =   121.77s Find the "converterPair_Weight" Any
+    t =   121.97s Find the "converterPair_Weight" Button
+    t =   122.17s Find the "converterPair_Weight" Button
+    t =   122.37s Checking existence of `"converterPair_Temp" Any`
+    t =   122.56s Find the "converterPair_Temp" Any
+    t =   122.82s Find the "converterPair_Temp" Button
+    t =   122.98s Find the "converterPair_Temp" Button
+    t =   123.20s Find the "backStep" Any
+    t =   123.41s Checking existence of `"ingredient_0" Any`
+    t =   123.79s Find the "ingredient_0" Any
+    t =   124.31s Find the "ingredient_0" Button
+    t =   124.76s Checking existence of `"ingredient_1" Any`
+    t =   125.21s Find the "ingredient_1" Any
+    t =   125.67s Find the "ingredient_1" Button
+    t =   126.22s Get all elements bound by index for: Descendants matching type Button
+    t =   126.34s Checking existence of `Button (Element at index 0)`
+    t =   126.43s Find the Button (Element at index 0)
+    t =   126.57s Checking existence of `Button (Element at index 1)`
+    t =   126.66s Find the Button (Element at index 1)
+    t =   126.78s Find the "exitCook" Button
+    t =   126.87s Checking existence of `Button (Element at index 2)`
+    t =   126.93s Find the Button (Element at index 2)
+    t =   127.01s Find the "servingsMinus" Button
+    t =   127.09s Checking existence of `Button (Element at index 3)`
+    t =   127.16s Find the Button (Element at index 3)
+    t =   127.30s Find the "servingsPlus" Button
+    t =   127.39s Checking existence of `Button (Element at index 4)`
+    t =   127.48s Find the Button (Element at index 4)
+    t =   127.59s Find the "backStep" Button
+    t =   127.67s Checking existence of `Button (Element at index 5)`
+    t =   127.75s Find the Button (Element at index 5)
+    t =   127.86s Find the "nextStep" Button
+    t =   127.94s Checking existence of `Button (Element at index 6)`
+    t =   128.03s Find the Button (Element at index 6)
+    t =   128.16s Find the "preset_1" Button
+    t =   128.26s Checking existence of `Button (Element at index 7)`
+    t =   128.36s Find the Button (Element at index 7)
+    t =   128.50s Find the "preset_5" Button
+    t =   128.61s Checking existence of `Button (Element at index 8)`
+    t =   128.73s Find the Button (Element at index 8)
+    t =   128.90s Find the "preset_10" Button
+    t =   129.01s Checking existence of `Button (Element at index 9)`
+    t =   129.12s Find the Button (Element at index 9)
+    t =   129.26s Find the "preset_15" Button
+    t =   129.36s Checking existence of `Button (Element at index 10)`
+    t =   129.44s Find the Button (Element at index 10)
+    t =   129.55s Find the "preset_30" Button
+    t =   129.64s Checking existence of `Button (Element at index 11)`
+    t =   129.74s Find the Button (Element at index 11)
+    t =   129.85s Find the "converterPair_Volume" Button
+    t =   129.94s Checking existence of `Button (Element at index 12)`
+    t =   130.03s Find the Button (Element at index 12)
+    t =   130.11s Find the "converterPair_Weight" Button
+    t =   130.19s Checking existence of `Button (Element at index 13)`
+    t =   130.25s Find the Button (Element at index 13)
+    t =   130.39s Find the "converterPair_Temp" Button
+    t =   130.49s Checking existence of `Button (Element at index 14)`
+    t =   130.59s Find the Button (Element at index 14)
+    t =   130.71s Find the "converterFrom" Button
+    t =   130.81s Checking existence of `Button (Element at index 15)`
+    t =   130.89s Find the Button (Element at index 15)
+    t =   131.03s Find the "arrow.left.arrow.right" Button
+    t =   131.12s Checking existence of `Button (Element at index 16)`
+    t =   131.21s Find the Button (Element at index 16)
+    t =   131.34s Find the "converterTo" Button
+    t =   131.46s Checking existence of `Button (Element at index 17)`
+    t =   131.57s Find the Button (Element at index 17)
+    t =   131.70s Checking existence of `Button (Element at index 18)`
+    t =   131.79s Find the Button (Element at index 18)
+    t =   131.93s Checking existence of `Button (Element at index 19)`
+    t =   132.02s Find the Button (Element at index 19)
+    t =   132.14s Checking existence of `Button (Element at index 20)`
+    t =   132.23s Find the Button (Element at index 20)
+    t =   132.36s Checking existence of `Button (Element at index 21)`
+    t =   132.46s Find the Button (Element at index 21)
+    t =   132.58s Find the "startStepTimer" Button
+    t =   132.67s Checking existence of `Button (Element at index 22)`
+    t =   132.76s Find the Button (Element at index 22)
+    t =   132.88s Find the "ingredient_0" Button
+    t =   132.98s Checking existence of `Button (Element at index 23)`
+    t =   133.07s Find the Button (Element at index 23)
+    t =   133.19s Find the "ingredient_1" Button
+    t =   133.27s Checking existence of `Button (Element at index 24)`
+    t =   133.34s Find the Button (Element at index 24)
+    t =   133.44s Find the "ingredient_2" Button
+    t =   133.55s Checking existence of `Button (Element at index 25)`
+    t =   133.64s Find the Button (Element at index 25)
+    t =   133.78s Checking existence of `Button (Element at index 26)`
+    t =   133.87s Find the Button (Element at index 26)
+    t =   134.02s Checking existence of `Button (Element at index 27)`
+    t =   134.11s Find the Button (Element at index 27)
+    t =   134.25s Checking existence of `Button (Element at index 28)`
+    t =   134.35s Find the Button (Element at index 28)
+    t =   134.45s Checking existence of `Button (Element at index 29)`
+    t =   134.54s Find the Button (Element at index 29)
+    t =   134.72s Find the "startCustomTimer" Button
+    t =   134.85s Checking existence of `Button (Element at index 30)`
+    t =   134.94s Find the Button (Element at index 30)
+    t =   135.03s Find the "timerPause_15 min" Button
+    t =   135.10s Checking existence of `Button (Element at index 31)`
+    t =   135.16s Find the Button (Element at index 31)
+    t =   135.26s Find the "timerAddMinute_15 min" Button
+    t =   135.33s Checking existence of `Button (Element at index 32)`
+    t =   135.40s Find the Button (Element at index 32)
+    t =   135.50s Find the "timerCancel_15 min" Button
+    t =   135.57s Checking existence of `Button (Element at index 33)`
+    t =   135.63s Find the Button (Element at index 33)
+    t =   135.72s Find the "timerPause_30 min" Button
+    t =   135.80s Checking existence of `Button (Element at index 34)`
+    t =   135.88s Find the Button (Element at index 34)
+    t =   135.99s Find the "timerAddMinute_30 min" Button
+    t =   136.07s Checking existence of `Button (Element at index 35)`
+    t =   136.15s Find the Button (Element at index 35)
+    t =   136.27s Find the "timerCancel_30 min" Button
+    t =   136.36s Checking existence of `Button (Element at index 36)`
+    t =   136.43s Find the Button (Element at index 36)
+    t =   136.54s Find the "timerMinutes-Decrement" Button
+    t =   136.63s Checking existence of `Button (Element at index 37)`
+    t =   136.70s Find the Button (Element at index 37)
+    t =   136.81s Find the "timerMinutes-Increment" Button
+    t =   136.91s Checking existence of `Button (Element at index 38)`
+    t =   137.00s Find the Button (Element at index 38)
+    t =   137.13s Checking existence of `Button (Element at index 39)`
+    t =   137.22s Find the Button (Element at index 39)
+    t =   137.35s Setting device orientation to Landscape Left
+    t =   137.37s     Device orientation changed to Landscape Left
+    t =   137.40s     Wait for com.hubertlee.countertopcook to idle
+    t =   137.40s     Wait for com.apple.springboard to idle
+    t =   138.48s Find the "cookPose" Any
+    t =   139.45s Find the "cookPose" Any
+    t =   140.43s Find the "cookPose" Any
+    t =   141.44s Find the "cookPose" Any
+    t =   142.42s Find the "cookPose" Any
+    t =   143.46s Find the "cookPose" Any
+    t =   144.43s Find the "cookPose" Any
+    t =   145.42s Find the "cookPose" Any
+    t =   145.47s Setting device orientation to Landscape Right
+    t =   145.48s     Device orientation changed to Landscape Right
+    t =   145.49s     Wait for com.hubertlee.countertopcook to idle
+    t =   145.50s     Wait for com.apple.springboard to idle
+    t =   146.56s Find the "cookPose" Any
+    t =   147.53s Find the "cookPose" Any
+    t =   148.59s Find the "cookPose" Any
+    t =   149.56s Find the "cookPose" Any
+    t =   150.54s Find the "cookPose" Any
+    t =   151.51s Find the "cookPose" Any
+    t =   152.59s Find the "cookPose" Any
+    t =   153.52s Find the "cookPose" Any
+    t =   153.57s Find the Window (First Match)
+    t =   153.59s Find the "cookPose" Any
+POSE: turned partial hinge: wanted tabletop, app reports book, window=(0.0, -5.684341886080802e-14, 951.0, 669.0)
+    t =   153.61s Setting device orientation to Portrait
+    t =   153.62s     Device orientation changed to Portrait
+    t =   153.63s     Wait for com.hubertlee.countertopcook to idle
+    t =   153.64s     Wait for com.apple.springboard to idle
+    t =   153.70s Tear Down
+    t =   153.70s     Setting device orientation to Portrait
+    t =   153.71s         Wait for com.hubertlee.countertopcook to idle
+    t =   153.72s         Wait for com.apple.springboard to idle
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (153.975 seconds).
+Test Suite 'CountertopCookUITests' passed at 2026-11-13 18:19:51.973.
+	 Executed 1 test, with 0 failures (0 unexpected) in 153.975 (153.978) seconds
+Test Suite 'CountertopCookUITests.xctest' passed at 2026-11-13 18:19:51.974.
+	 Executed 1 test, with 0 failures (0 unexpected) in 153.975 (153.979) seconds
+Test Suite 'Selected tests' passed at 2026-11-13 18:19:51.975.
+	 Executed 1 test, with 0 failures (0 unexpected) in 153.975 (153.981) seconds
+2026-11-13 18:19:52.104 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.104 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.104 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.104 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.109 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.109 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.269 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.269 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.269 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.269 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.270 xcodebuild[79770:204583] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-13 18:19:52.270 xcodebuild[79770:204583] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.1 (24A94425), error = invalidDigitCount(94425).
+2026-11-13 18:19:52.860 xcodebuild[79770:204583] [MT] IDETestOperationsObserverDebug: 162.114 elapsed -- Testing started completed.
+2026-11-13 18:19:52.860 xcodebuild[79770:204583] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-13 18:19:52.860 xcodebuild[79770:204583] [MT] IDETestOperationsObserverDebug: 162.114 sec, +162.114 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/CountertopCook/CountertopCook/ci-output/Duo-partial.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

@@ -1,0 +1,57 @@
+== Xcode
+/Applications/Xcode_27.1.app/Contents/Developer
+Xcode 27.1
+Build version 27A9275
+
+== iOS SDKs
+iOS SDKs:
+	iOS 27.1                      	-sdk iphoneos27.1
+iOS Simulator SDKs:
+	Simulator - iOS 27.1          	-sdk iphonesimulator27.1
+
+== iOS simulator runtimes
+iOS 27.0 (27.0 - 24A434) - com.apple.CoreSimulator.SimRuntime.iOS-27-0
+iOS 27.1 (27.1 - 24A94425) - com.apple.CoreSimulator.SimRuntime.iOS-27-1
+iOS 27.2 (27.2 - 24B8117) - com.apple.CoreSimulator.SimRuntime.iOS-27-2
+iOS 27.2 (27.2 - 24B91016s) - com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4
+
+== iPhone Duo device type
+YES: iPhone Duo (com.apple.CoreSimulator.SimDeviceType.iPhone-Duo)
+Other Duo / Fold device types:
+iPhone Duo (com.apple.CoreSimulator.SimDeviceType.iPhone-Duo)
+
+== Existing iPhone Duo simulators
+-- iOS 27.1 --
+    iPhone Duo (09693AE6-5842-4CF5-B801-D905E896271E) (Shutdown) 
+--
+-- iOS 27.2 --
+    iPhone Duo (C898E3E4-5033-4085-B886-963EE2D0C478) (Shutdown) 
+
+== Fold-related symbols in /Applications/Xcode_27.1.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.1.sdk
+-- SwiftUI
+-- UIKit
+  51 UIArrangementViewController
+  41 ReservedRegion
+  40 hinge
+  12 UIHingeInteraction
+   8 UIViewReservedRegion
+   8 UIHinge
+   8 UIArrangementViewControllerViewPlacement
+   5 UIViewReservedRegionKind
+   3 UIViewReservedRegionIdentifier
+   3 UISplitArrangementViewProperties
+   3 UIOverlayArrangementViewProperties
+   2 UIViewReservedRegionQueryOptions
+   2 UIHingeStatus
+   2 UIHingeInteractionUpdate
+   2 UIArrangementViewState
+   2 UIArrangementViewControllerViewPlacementNone
+   2 handleHingeUnavailable
+   1 UIViewReservedRegionQueryOptionsNone
+   1 UIViewReservedRegionQueryOptionsIncludeInactive
+   1 UIHingeStatusUnknown
+   1 UIHingeStatusPartiallyOpen
+   1 UIHingeStatusFullyOpen
+   1 UIHingeStatusClosed
+   1 UIArrangementViewControllerViewPlacementSecondary
+   1 UIArrangementViewControllerViewPlacementPrimary

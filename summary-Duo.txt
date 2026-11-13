@@ -1,0 +1,27 @@
+/Users/runner/work/CountertopCook/CountertopCook/UITests/CountertopCookUITests.swift:18: error: -[CountertopCookUITests.CountertopCookUITests testAddRecipeCookThroughAllStepsAndFinish] : Failed to get background assertion for target app with pid 11395: Timed out while acquiring background assertion.
+Test Case '-[CountertopCookUITests.CountertopCookUITests testAddRecipeCookThroughAllStepsAndFinish]' failed (198.808 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testAddRecipeCookThroughAllStepsAndFinish]' passed (244.189 seconds).
+COLOUR: dark library background at (6.0, 220.0) = #1C1712, want #1C1712
+COLOUR: plain cover at (101.0, 320.8) = #1B2F4A, want #1B2F4A
+COLOUR: dark book page at (28.0, 194.0) = #2E2720, want #2E2720
+COLOUR: dark Cook Mode at (14.0, 354.16666666666663) = #211B15, want #1C1712
+COLOUR: light library background at (6.0, 220.0) = #FDF6E9, want #FDF6E9
+Test Case '-[CountertopCookUITests.CountertopCookUITests testDarkModeColours]' passed (59.834 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testImportFromLink]' passed (177.807 seconds).
+FOLD: expected closed or none, app reports closed
+POSE: closed run, app reports closed
+POSE: closed-step2 last ingredient (20.0, 509.99999999999994, 342.0, 40.00000000000006) back=(20.0, 576.0, 118.33333333333331, 56.0)
+FOLD: closed Duo checked in portrait; unfolded layout is checked in the open and partial runs
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (92.071 seconds).
+FILTERS: favourites=(286.0, 148.0, 36.0, 36.0) add=(318.0, 90.0, 44.0, 44.0) cart=(264.0, 90.0, 44.0, 44.0) window=(0.0, 0.0, 466.0, 678.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLibraryFilterRowAndButtonsFit]' passed (19.768 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testOpenPortraitShowsWholeLongStep]' passed (73.339 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving]' passed (66.814 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPoseGallery]' passed (100.093 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testRecipeOpensAsBookAndKeepsNotes]' passed (62.968 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testServingsRescaleIngredients]' passed (35.950 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testStartupPageThenLibrary]' passed (43.205 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTenStarterRecipesAndDelete]' passed (95.753 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testToBuyListCombinesRecipesAndChecksOff]' passed (161.426 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTwoTimersKeepCountingAcrossSteps]' passed (56.985 seconds).
+** TEST EXECUTE SUCCEEDED **
