@@ -6,24 +6,21 @@ import VisionKit
 /// The text is read on the phone (see PhotoText), then the review screen opens in this sheet
 /// like any other import. Nothing is saved until the cook taps Save there.
 struct PhotoImportView: View {
-    let onSaved: (Recipe) -> Void
+    let onDraft: (RecipeDraft) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var picked: [PhotosPickerItem] = []
     let scanNow: Bool
     @State private var scanning = false
     @State private var reading = false
+    @State private var status: String?
     @State private var readError: String?
-    @State private var draft: RecipeDraft?
 
-    init(scanNow: Bool = false, onSaved: @escaping (Recipe) -> Void) {
-        self.onSaved = onSaved
+    init(scanNow: Bool = false, onDraft: @escaping (RecipeDraft) -> Void) {
+        self.onDraft = onDraft
         self.scanNow = scanNow
     }
 
     var body: some View {
-        if let draft {
-            RecipeEditorView(review: draft, onSaved: onSaved)
-        } else {
             NavigationStack {
                 Form {
                     Section {
@@ -47,7 +44,7 @@ struct PhotoImportView: View {
                         if reading {
                             HStack(spacing: 8) {
                                 ProgressView()
-                                Text("Reading the recipe…")
+                                Text(status ?? "Reading the recipe…")
                             }
                             .accessibilityIdentifier("photoImportProgress")
                         }
@@ -95,7 +92,6 @@ struct PhotoImportView: View {
                     .ignoresSafeArea()
                 }
             }
-        }
     }
 
     private func loadData(_ items: [PhotosPickerItem]) async throws -> [Data] {
@@ -113,8 +109,12 @@ struct PhotoImportView: View {
         readError = nil
         Task {
             do {
+                status = "Reading the recipe…"
                 let text = try await PhotoText.text(inImageData: try await pictures())
-                draft = LinkImport.draft(fromText: text, sourceName: "Photo")
+                let draft = await LinkImport.smartDraft(fromText: text, sourceName: "Photo") { line in
+                    Task { @MainActor in status = line }
+                }
+                onDraft(draft)
             } catch {
                 readError = error.localizedDescription
             }

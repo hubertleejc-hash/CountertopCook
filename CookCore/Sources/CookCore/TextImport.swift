@@ -61,14 +61,21 @@ public enum TextRecipeParser {
 
     private static let ingredientHeadings = ["ingredients", "ingredient", "ingredient list", "ingredients list",
                                              "what you need", "what you'll need", "what you’ll need", "you will need",
-                                             "you'll need", "you’ll need", "shopping list", "ingredients needed"]
+                                             "you'll need", "you’ll need", "shopping list", "ingredients needed",
+                                             "食材", "食材准备", "准备食材", "所需食材", "食材清单", "用料", "材料", "材料准备",
+                                             "原料", "主料", "辅料", "配料", "调料", "调味料", "酱汁", "料汁", "凉拌汁",
+                                             "腌料", "蘸料", "主料准备", "配菜"]
     private static let methodHeadings = ["method", "instructions", "instruction", "directions", "steps", "preparation",
                                          "how to make it", "how to make", "how to cook", "how to cook it", "procedure",
                                          "recipe steps", "cooking steps", "cooking instructions", "cooking method",
-                                         "steps to make", "to make"]
+                                         "steps to make", "to make",
+                                         "做法", "步骤", "制作步骤", "做法步骤", "制作方法", "烹饪步骤", "方法", "制作过程",
+                                         "操作步骤", "烹饪方法", "具体做法", "做法如下", "制作"]
     private static let otherHeadings = ["notes", "note", "tips", "tip", "nutrition", "nutrition facts", "equipment",
                                         "storage", "faq", "video", "chapters", "timestamps", "follow me", "music",
-                                        "links", "subscribe", "social", "credits"]
+                                        "links", "subscribe", "social", "credits",
+                                        "小贴士", "贴士", "小窍门", "窍门", "注意", "注意事项", "温馨提示", "提示", "小技巧",
+                                        "营养", "营养成分"]
 
     /// Reads a recipe out of pasted text. Looks for an "Ingredients" list and a "Method" /
     /// "Instructions" / "Directions" list; without those headings it takes numbered lines as
@@ -76,28 +83,81 @@ public enum TextRecipeParser {
     /// line. Servings and total time come only from lines that state them ("Serves 4",
     /// "Total time: 45 min"). Anything the text doesn't give stays empty or nil.
     public static func parse(_ text: String) -> ImportedRecipe {
-        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-            // Video captions number their steps with keycap emoji: "1️⃣ Boil the pasta" → "1. Boil the pasta".
-            .replacingOccurrences(of: "([0-9])\u{FE0F}?\u{20E3}", with: "$1. ", options: .regularExpression)
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            // Hashtag and @mention lines at the end of a caption are not part of the recipe.
-            .filter { !isTagLine($0) }
+        let lines = normalisedLines(text)
 
         var title = ""
         var servings: Int?
         var total: Int?
         var prep: Int?
         var cook: Int?
-        var ingredients: [String] = []
+        var ingredients: [ImportedRecipe.Ingredient] = []
         var steps: [String] = []
         var sawHeading = false
         var section = Section.preamble
         var loose: [String] = []
+        // The method numbers its steps, so an unnumbered line carries on the step before it
+        // (a step wrapped over several lines on a card or in a photo).
+        var stepsNumbered = false
+        // The last ingredient was a bare Chinese word with no amount: it may really be the title
+        // of the step panel that follows ("煮鸡胸肉" above "鸡胸肉冷水下锅，…").
+        var lastIngredientBare = false
+
+        func addIngredient(_ line: String) {
+            let item = stripBullet(line)
+            lastIngredientBare = false
+            guard !item.isEmpty, !item.hasSuffix(":"), !item.hasSuffix("：") else { return }
+            if ChineseRecipe.hasHan(item) {
+                let items = ChineseRecipe.ingredients(in: item)
+                if items.isEmpty {
+                    ingredients.append(.init(amount: "", unit: "", name: item))
+                    lastIngredientBare = ChineseRecipe.isShortTitle(item)
+                } else {
+                    ingredients += items
+                }
+            } else {
+                ingredients.append(RecipeImporter.splitIngredient(item))
+            }
+        }
+
+        func addStep(_ line: String) {
+            let raw = stripBullet(line)
+            let numbered = stepNumber(raw) != nil
+            let step = stripNumber(raw)
+            guard !step.isEmpty else { return }
+            if !numbered, (step.hasSuffix(":") || step.hasSuffix("：")), step.count < 40 { return }
+            if numbered {
+                stepsNumbered = true
+            } else if let last = steps.last {
+                if ChineseRecipe.hasHan(step), !ChineseRecipe.endsSentence(last) {
+                    // A panel's title, then its text: "煮鸡胸肉：鸡胸肉冷水下锅…"; a wrapped line runs on.
+                    steps[steps.count - 1] = last + (ChineseRecipe.isShortTitle(last) ? "：" : "") + step
+                    return
+                }
+                if stepsNumbered, !ChineseRecipe.hasHan(step) {
+                    steps[steps.count - 1] = last + " " + step
+                    return
+                }
+            }
+            steps.append(step)
+        }
+
+        /// A recipe card often goes straight from its ingredients to numbered steps, with no
+        /// "Method" heading: step 1, or a Chinese sentence with no amount in it, starts the method.
+        func startsMethod(_ line: String) -> Bool {
+            let raw = stripBullet(line)
+            if stepNumber(raw) == 1 {
+                let rest = stripNumber(raw)
+                return ChineseRecipe.hasHan(rest) ? ChineseRecipe.ingredients(in: rest).isEmpty
+                                                  : RecipeImporter.splitIngredient(rest).amount.isEmpty
+            }
+            return ChineseRecipe.hasHan(raw) && ChineseRecipe.isSentence(raw) && !ingredients.isEmpty
+                && (raw.contains("。") || ChineseRecipe.ingredients(in: raw).isEmpty)
+        }
 
         for line in lines where !line.isEmpty {
             if let heading = heading(line) {
                 section = heading
+                lastIngredientBare = false
                 if heading == .ingredients || heading == .method { sawHeading = true }
                 continue
             }
@@ -116,24 +176,40 @@ public enum TextRecipeParser {
             case .preamble:
                 if title.isEmpty, let candidate = titleCandidate(line) { title = candidate } else { loose.append(line) }
             case .ingredients:
-                let item = stripBullet(line)
-                if !item.isEmpty, !item.hasSuffix(":") { ingredients.append(item) }
+                if startsMethod(line) {
+                    section = .method
+                    if lastIngredientBare, stepNumber(stripBullet(line)) == nil, let bare = ingredients.popLast() {
+                        steps.append(bare.name)
+                    }
+                    addStep(line)
+                } else {
+                    addIngredient(line)
+                }
             case .method:
-                let step = stripNumber(stripBullet(line))
-                if !step.isEmpty, !(step.hasSuffix(":") && step.count < 40) { steps.append(step) }
+                addStep(line)
             case .other:
                 break
             }
         }
 
         if !sawHeading {
-            // No headings: numbered lines are steps; lines that start with an amount are ingredients.
+            // No headings: numbered lines are steps (and, in Chinese, the sentences that carry
+            // them on); lines that hold an amount are ingredients.
+            var inSteps = false
             for line in loose {
-                if line.range(of: #"^(?:step\s*)?\d+\s*[.):]\s+\S"#, options: [.regularExpression, .caseInsensitive]) != nil {
-                    steps.append(stripNumber(line))
-                } else {
-                    let item = stripBullet(line)
-                    if !RecipeImporter.splitIngredient(item).amount.isEmpty { ingredients.append(item) }
+                let raw = stripBullet(line)
+                if stepNumber(raw) != nil {
+                    inSteps = true
+                    addStep(line)
+                } else if ChineseRecipe.hasHan(raw) {
+                    let items = ChineseRecipe.isSentence(raw) ? [] : ChineseRecipe.ingredients(in: raw)
+                    if !items.isEmpty {
+                        ingredients += items
+                    } else if inSteps {
+                        addStep(line)
+                    }
+                } else if !RecipeImporter.splitIngredient(raw).amount.isEmpty {
+                    ingredients.append(RecipeImporter.splitIngredient(raw))
                 }
             }
         }
@@ -143,10 +219,54 @@ public enum TextRecipeParser {
             title: title,
             servings: servings,
             totalMinutes: total ?? (sum.isEmpty ? nil : sum.reduce(0, +)),
-            ingredients: ingredients.map(RecipeImporter.splitIngredient),
+            ingredients: ingredients,
             steps: steps,
             siteName: "",
             cuisine: nil)
+    }
+
+    /// Lines, trimmed, with step markers written out as "1. ": keycap emoji (1️⃣), circled
+    /// numbers (①, ❶), "第1步" / "步骤1", Chinese list numbers (一、), and full-width digits.
+    static func normalisedLines(_ text: String) -> [String] {
+        var text = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            // Video captions number their steps with keycap emoji: "1️⃣ Boil the pasta" → "1. Boil the pasta".
+            .replacingOccurrences(of: "([0-9])\u{FE0F}?\u{20E3}", with: "$1. ", options: .regularExpression)
+        // Full-width digits (１２３) as ASCII.
+        text = String(String.UnicodeScalarView(text.unicodeScalars.map { scalar in
+            (0xFF10...0xFF19).contains(scalar.value) ? Unicode.Scalar(scalar.value - 0xFF10 + 0x30)! : scalar
+        }))
+        var circled: [Character: Int] = [:]
+        for (first, count) in [(0x2460, 20), (0x2474, 20), (0x2776, 10), (0x2780, 10), (0x278A, 10), (0x24F5, 10)] {
+            for i in 0..<count { circled[Character(Unicode.Scalar(UInt32(first + i))!)] = i + 1 }
+        }
+        let chineseOrdinals = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10]
+        return text.components(separatedBy: "\n").map { raw -> String in
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            if let first = line.first, let n = circled[first] {
+                line = "\(n). " + line.dropFirst().trimmingCharacters(in: .whitespaces)
+            } else if let match = line.range(of: #"^(?:第\s*(\d{1,2})\s*步|步骤\s*(\d{1,2}))\s*[:：、.]?\s*"#, options: .regularExpression) {
+                let digits = line[match].filter(\.isNumber)
+                line = "\(digits). " + line[match.upperBound...]
+            } else if line.count > 2, let n = chineseOrdinals[String(line.prefix(1))], line.dropFirst().first == "、" {
+                line = "\(n). " + line.dropFirst(2)
+            }
+            return line
+        }
+        // Hashtag and @mention lines at the end of a caption are not part of the recipe.
+        .filter { !isTagLine($0) }
+    }
+
+    private static let stepNumberRegex = try? NSRegularExpression(
+        pattern: #"^(?:step\s*)?(\d{1,2})\s*(?:[.)：:、]|\s+(?=\p{Han}))"#, options: .caseInsensitive)
+
+    /// The number a step line starts with: "1. …", "2) …", "Step 3: …", "4 煮面条", "5、…".
+    static func stepNumber(_ line: String) -> Int? {
+        guard let stepNumberRegex,
+              let match = stepNumberRegex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+              let range = Range(match.range(at: 1), in: line), let whole = Range(match.range, in: line) else { return nil }
+        // "2.5 cups" is an amount and "0:00 Intro" a timestamp, not a step.
+        if line[whole.upperBound...].first?.isNumber == true { return nil }
+        return Int(line[range])
     }
 
     private static func heading(_ line: String) -> Section? {
@@ -201,7 +321,8 @@ public enum TextRecipeParser {
     }
 
     private static func stripNumber(_ line: String) -> String {
-        line.replacingOccurrences(of: #"^(?:step\s*)?\d+\s*[.):]\s*|^step\s*\d+\s*[-–—]?\s*"#, with: "",
+        guard stepNumber(line) != nil || line.lowercased().hasPrefix("step") else { return line }
+        return line.replacingOccurrences(of: #"^(?:step\s*)?\d+\s*(?:[.):：、]|(?=\s+\p{Han}))\s*|^step\s*\d+\s*[-–—]?\s*"#, with: "",
                                   options: [.regularExpression, .caseInsensitive])
             .trimmingCharacters(in: .whitespaces)
     }
@@ -288,6 +409,19 @@ public enum YouTubePage {
             Range(match.range(at: 2), in: xml).map { RecipeImporter.clean(RecipeImporter.clean(String(xml[$0]))) }
         }
         return pieces.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    /// The spoken text from YouTube's JSON captions (`fmt=json3`): one line per caption.
+    public static func transcript(json3 data: Data) -> String {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let events = json["events"] as? [[String: Any]] else { return "" }
+        var lines: [String] = []
+        for event in events {
+            let text = (event["segs"] as? [[String: Any]] ?? []).compactMap { $0["utf8"] as? String }.joined()
+                .replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty, text != lines.last { lines.append(text) }
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// The JSON string that starts right after `prefix` (a regular expression ending at the

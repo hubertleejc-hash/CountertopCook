@@ -2,6 +2,7 @@ import Foundation
 import Vision
 import CoreGraphics
 import ImageIO
+import CookCore
 
 /// Reads the text in photos of a recipe: a cookbook page, a recipe card, a handwritten note, or
 /// screenshots of a recipe shown in a video or a post. Apple's on-device text recognition
@@ -54,80 +55,61 @@ enum PhotoText {
 
     // MARK: Reading one picture
 
-    private struct Line {
-        let text: String
-        let box: CGRect   // Vision's normalised box: origin bottom-left, 0…1.
-    }
-
     private static func read(_ image: CGImage) throws -> String {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
+        // Chinese and English recipes; the Chinese models read English too.
+        let wanted = ["zh-Hans", "zh-Hant", "en-US"]
+        if let supported = try? request.supportedRecognitionLanguages() {
+            let languages = wanted.filter { supported.contains($0) }
+            if !languages.isEmpty { request.recognitionLanguages = languages }
+        }
         request.automaticallyDetectsLanguage = true
         try VNImageRequestHandler(cgImage: image, orientation: .up).perform([request])
-        let lines: [Line] = (request.results ?? []).compactMap { observation in
-            guard let text = observation.topCandidates(1).first?.string.trimmingCharacters(in: .whitespaces),
-                  !text.isEmpty else { return nil }
-            return Line(text: text, box: observation.boundingBox)
-        }
-        return arrange(lines)
+        let size = CGSize(width: image.width, height: image.height)
+        let boxes = (request.results ?? []).flatMap { pieces(of: $0, in: size) }
+        return TextLayout.readingOrder(boxes)
     }
 
-    /// Puts the lines in reading order. A page in two columns (ingredients on the left, method on
-    /// the right, as many recipe cards are laid out) is read one column after the other rather
-    /// than across both, so the two lists don't get mixed up line by line.
-    private static func arrange(_ lines: [Line]) -> String {
-        guard !lines.isEmpty else { return "" }
-        if let split = columnSplit(lines) {
-            // A title across the top of both columns comes first.
-            let header = lines.filter { crosses($0, split) }
-            let body = lines.filter { !crosses($0, split) }
-            let left = body.filter { $0.box.midX < split }
-            let right = body.filter { $0.box.midX >= split }
-            return [rows(header), rows(left), rows(right)].filter { !$0.isEmpty }.joined(separator: "\n")
+    /// The observation as boxes in pixels (origin top left). A line the recogniser read across
+    /// a wide gap ("鸡胸肉 2块      鲜面条 300g", or the titles of two step panels side by side)
+    /// is cut at the gap, so the layout reader can tell the columns apart.
+    private static func pieces(of observation: VNRecognizedTextObservation, in size: CGSize) -> [TextLayout.Box] {
+        guard let candidate = observation.topCandidates(1).first else { return [] }
+        let text = candidate.string
+        func pixels(_ box: CGRect) -> CGRect {
+            CGRect(x: box.minX * size.width, y: (1 - box.maxY) * size.height,
+                   width: box.width * size.width, height: box.height * size.height)
         }
-        return rows(lines)
-    }
-
-    /// Top to bottom; pieces at the same height (an amount and its ingredient, read as two
-    /// boxes) are joined left to right into one line.
-    private static func rows(_ lines: [Line]) -> String {
-        let sorted = lines.sorted { $0.box.midY > $1.box.midY }
-        var rows: [[Line]] = []
-        for line in sorted {
-            if let last = rows.last?.last, abs(last.box.midY - line.box.midY) < min(last.box.height, line.box.height) * 0.5 {
-                rows[rows.count - 1].append(line)
+        let whole = pixels(observation.boundingBox)
+        // Words (runs between spaces) and where each one sits.
+        var words: [(text: String, rect: CGRect)] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            guard let start = text[index...].firstIndex(where: { !$0.isWhitespace }) else { break }
+            let end = text[start...].firstIndex(where: { $0.isWhitespace }) ?? text.endIndex
+            if let box = try? candidate.boundingBox(for: start..<end)?.boundingBox {
+                words.append((String(text[start..<end]), pixels(box)))
             } else {
-                rows.append([line])
+                return [TextLayout.Box(text: text, rect: whole)]
+            }
+            index = end
+        }
+        guard words.count > 1 else { return [TextLayout.Box(text: text, rect: whole)] }
+        var result: [TextLayout.Box] = []
+        var current = TextLayout.Box(text: words[0].text, rect: words[0].rect)
+        for word in words.dropFirst() {
+            if word.rect.minX - current.rect.maxX > whole.height * 1.1 {
+                result.append(current)
+                current = TextLayout.Box(text: word.text, rect: word.rect)
+            } else {
+                current.text += " " + word.text
+                current.rect = current.rect.union(word.rect)
             }
         }
-        return rows.map { row in row.sorted { $0.box.minX < $1.box.minX }.map(\.text).joined(separator: " ") }
-            .joined(separator: "\n")
-    }
-
-    private static func crosses(_ line: Line, _ x: CGFloat) -> Bool { line.box.minX < x && line.box.maxX > x }
-
-    /// An x position in the middle of the page that no line crosses (apart from up to three
-    /// title lines above everything else), with at least three lines on each side; nil for a
-    /// page in one column.
-    private static func columnSplit(_ lines: [Line]) -> CGFloat? {
-        var best: (x: CGFloat, gap: CGFloat)?
-        for step in 30...70 {
-            let x = CGFloat(step) / 100
-            let header = lines.filter { crosses($0, x) }
-            let body = lines.filter { !crosses($0, x) }
-            guard header.count <= 3 else { continue }
-            if let lowestHeader = header.map(\.box.minY).min(), let topOfBody = body.map(\.box.maxY).max(),
-               lowestHeader < topOfBody { continue }
-            let left = body.filter { $0.box.maxX <= x }
-            let right = body.filter { $0.box.minX >= x }
-            guard left.count >= 3, right.count >= 3 else { continue }
-            // Prefer the middle of the widest clear band.
-            let leftEdge = left.map(\.box.maxX).max() ?? x
-            let rightEdge = right.map(\.box.minX).min() ?? x
-            let gap = rightEdge - leftEdge
-            if gap > (best?.gap ?? 0.02) { best = ((leftEdge + rightEdge) / 2, gap) }
-        }
-        return best?.x
+        result.append(current)
+        return result.map { TextLayout.Box(text: $0.text, rect: CGRect(x: $0.rect.minX, y: whole.minY,
+                                                                      width: $0.rect.width, height: whole.height)) }
     }
 }

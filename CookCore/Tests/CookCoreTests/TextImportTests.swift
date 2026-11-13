@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 @testable import CookCore
 
@@ -239,5 +240,119 @@ import Testing
     @Test func pageDataIsOnlyReadOnVideoSites() {
         let html = #"<script>{"desc":"Ingredients\n1 cup sugar"}</script>"#
         #expect(PageCaption.extract(html: html, page: URL(string: "https://example.com/post")).text == nil)
+    }
+}
+
+@Suite struct ChineseRecipeTests {
+    /// The 鸡丝凉面 card as the photo reader puts it in order: the title, two ingredient grids,
+    /// then nine step panels (number and title, then the panel's text over a few lines), then tips.
+    static let card = """
+    鸡丝凉面
+    食材准备
+    鸡胸肉 2块
+    鲜面条 300g
+    黄瓜 1根
+    胡萝卜 半根
+    花生碎 适量
+    香菜 适量
+    熟白芝麻 适量
+    香油 少许
+    凉拌汁
+    蒜末 3瓣
+    生抽 3勺
+    香醋 2勺
+    1 煮鸡胸肉
+    鸡胸肉冷水下锅，加姜片和
+    少许料酒，煮至断生熟透，
+    捞出放凉。
+    ② 撕成鸡丝
+    放凉后的鸡胸肉顺着纹理撕
+    成细丝，口感更嫩更入味。
+    ❸ 调凉拌汁
+    碗中放蒜末、生抽、香醋，搅匀备用。
+    小贴士
+    1. 面条过凉后拌少许香油，更筋道不粘；
+    """
+
+    @Test func readsTheCard() {
+        let recipe = TextRecipeParser.parse(Self.card)
+        #expect(recipe.title == "鸡丝凉面")
+        #expect(recipe.ingredients.count == 11)
+        #expect(recipe.ingredients[0] == .init(amount: "2", unit: "块", name: "鸡胸肉"))
+        #expect(recipe.ingredients[1] == .init(amount: "300", unit: "g", name: "鲜面条"))
+        #expect(recipe.ingredients[3] == .init(amount: "1/2", unit: "根", name: "胡萝卜"))
+        #expect(recipe.ingredients[4] == .init(amount: "", unit: "适量", name: "花生碎"))
+        #expect(recipe.ingredients[8] == .init(amount: "3", unit: "瓣", name: "蒜末"))
+        #expect(recipe.steps == [
+            "煮鸡胸肉：鸡胸肉冷水下锅，加姜片和少许料酒，煮至断生熟透，捞出放凉。",
+            "撕成鸡丝：放凉后的鸡胸肉顺着纹理撕成细丝，口感更嫩更入味。",
+            "调凉拌汁：碗中放蒜末、生抽、香醋，搅匀备用。",
+        ])
+    }
+
+    @Test func gridRowReadAsOneLine() {
+        let recipe = TextRecipeParser.parse("食材\n鸡胸肉 2块 鲜面条 300g 黄瓜 1根\n盐 少许 2个鸡蛋")
+        #expect(recipe.ingredients.map(\.name) == ["鸡胸肉", "鲜面条", "黄瓜", "盐", "鸡蛋"])
+        #expect(recipe.ingredients.last == .init(amount: "2", unit: "个", name: "鸡蛋"))
+    }
+
+    @Test func stepPanelsWithoutNumbers() {
+        // The circled numbers can be lost on a busy card: the titles and sentences still make steps.
+        let recipe = TextRecipeParser.parse("面\n用料\n面条 200g\n煮面条\n锅中水开下面条，煮至熟透。\n装盘\n淋上酱汁即可。")
+        #expect(recipe.ingredients == [.init(amount: "200", unit: "g", name: "面条")])
+        #expect(recipe.steps == ["煮面条：锅中水开下面条，煮至熟透。", "装盘：淋上酱汁即可。"])
+    }
+
+    @Test func proseIsNotARecipe() {
+        let recipe = TextRecipeParser.parse("今天给大家介绍一道“蛋炒饭”，在家也能做出路边摊的感觉。蛋黄蛋清分开炒的原因是两个香气。\n\n大家好，我是厨师长。")
+        #expect(recipe.ingredients.isEmpty)
+        #expect(recipe.steps.isEmpty)
+    }
+
+    @Test func chineseNumbers() {
+        #expect(ChineseRecipe.chineseNumber("两") == "2")
+        #expect(ChineseRecipe.chineseNumber("十二") == "12")
+        #expect(ChineseRecipe.chineseNumber("半") == "1/2")
+        #expect(ChineseRecipe.chineseNumber("文") == nil)
+    }
+}
+
+@Suite struct TextLayoutTests {
+    private func box(_ text: String, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat = 28) -> TextLayout.Box {
+        .init(text: text, rect: CGRect(x: x, y: y, width: w, height: h))
+    }
+
+    @Test func stepPanelsAreReadOneAtATime() {
+        // Two rows of three panels, each panel's text under a picture: never across the row.
+        var boxes: [TextLayout.Box] = []
+        for (row, top) in [(0, 640.0), (1, 980.0)] {
+            for column in 0..<3 {
+                let x = 50.0 + Double(column) * 350
+                let n = row * 3 + column + 1
+                boxes.append(box("\(n) 标题\(n)", x, top, 160, 34))
+                boxes.append(box("第\(n)步第一行，", x, top + 45, 260))
+                boxes.append(box("第\(n)步第二行。", x, top + 80, 200))
+            }
+        }
+        let lines = TextLayout.readingOrder(boxes).components(separatedBy: "\n")
+        #expect(lines == (1...6).flatMap { ["\($0) 标题\($0)", "第\($0)步第一行，", "第\($0)步第二行。"] })
+    }
+
+    @Test func ingredientGridReadCellByCell() {
+        let boxes = [
+            box("鸡丝凉面", 560, 20, 390, 90),
+            box("食材准备", 560, 128, 120),
+            box("鸡胸肉 2块", 565, 170, 115), box("鲜面条 300g", 735, 170, 130), box("黄瓜 1根", 900, 170, 90),
+            box("胡萝卜 半根", 565, 205, 120), box("花生碎 适量", 735, 205, 120), box("香菜 适量", 900, 205, 100),
+        ]
+        let lines = TextLayout.readingOrder(boxes).components(separatedBy: "\n")
+        #expect(lines.first == "鸡丝凉面")
+        #expect(Set(lines) == Set(boxes.map(\.text)))
+        #expect(lines.count == boxes.count)
+    }
+
+    @Test func captionsJSON() {
+        let json = #"{"events":[{"segs":[{"utf8":"先把"},{"utf8":"鸡蛋打散"}]},{"segs":[{"utf8":"\n"}]},{"segs":[{"utf8":"热锅下油"}]}]}"#
+        #expect(YouTubePage.transcript(json3: Data(json.utf8)) == "先把鸡蛋打散\n热锅下油")
     }
 }

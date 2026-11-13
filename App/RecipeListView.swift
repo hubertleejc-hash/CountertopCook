@@ -29,6 +29,8 @@ struct RecipeListView: View {
         case paste(String)
         /// Import from photos or screenshots; `scan` opens the document camera straight away.
         case photos(scan: Bool)
+        /// Import a video saved to Photos.
+        case video
 
         var id: String {
             switch self {
@@ -36,6 +38,7 @@ struct RecipeListView: View {
             case .link(let link, _): return "link-\(link)"
             case .paste: return "paste"
             case .photos: return "photos"
+            case .video: return "video"
             }
         }
     }
@@ -110,11 +113,13 @@ struct RecipeListView: View {
                 case .manual:
                     RecipeEditorView(recipe: nil)
                 case .link(let link, let start):
-                    ImportLinkView(initialLink: link, startNow: start) { open($0) }
+                    ImportSheet(start: .link(link, start: start)) { open($0) }
                 case .paste(let text):
-                    PasteTextView(initialText: text) { open($0) }
+                    ImportSheet(start: .paste(text)) { open($0) }
                 case .photos(let scan):
-                    PhotoImportView(scanNow: scan) { open($0) }
+                    ImportSheet(start: .photos(scan: scan)) { open($0) }
+                case .video:
+                    ImportSheet(start: .video) { open($0) }
                 }
             }
         }
@@ -185,6 +190,12 @@ struct RecipeListView: View {
                 Label("Import from photos", systemImage: "photo.on.rectangle.angled")
             }
             .accessibilityIdentifier("menuImportPhotos")
+            Button {
+                sheet = .video
+            } label: {
+                Label("Import a saved video", systemImage: "film")
+            }
+            .accessibilityIdentifier("menuImportVideo")
             if DocumentScanner.isSupported {
                 Button {
                     sheet = .photos(scan: true)
@@ -419,23 +430,20 @@ struct BookCover: View {
 /// Import from a link: a recipe page, or a video (YouTube, TikTok, Instagram, Facebook…). The review screen opens in this sheet.
 struct ImportLinkView: View {
     let startNow: Bool
-    let onSaved: (Recipe) -> Void
+    let onDraft: (RecipeDraft) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var link: String
     @State private var importing = false
+    @State private var status: String?
     @State private var importError: String?
-    @State private var draft: RecipeDraft?
 
-    init(initialLink: String, startNow: Bool, onSaved: @escaping (Recipe) -> Void) {
+    init(initialLink: String, startNow: Bool, onDraft: @escaping (RecipeDraft) -> Void) {
         self.startNow = startNow
-        self.onSaved = onSaved
+        self.onDraft = onDraft
         _link = State(initialValue: initialLink)
     }
 
     var body: some View {
-        if let draft {
-            RecipeEditorView(review: draft, onSaved: onSaved)
-        } else {
             NavigationStack {
                 Form {
                     Section {
@@ -466,7 +474,7 @@ struct ImportLinkView: View {
                         Button(action: startImport) {
                             HStack(spacing: 8) {
                                 if importing { ProgressView().accessibilityIdentifier("importProgress") }
-                                Text(importing ? "Reading…" : "Import").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
+                                Text(importing ? (status ?? "Reading…") : "Import").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -489,20 +497,24 @@ struct ImportLinkView: View {
             .task {
                 if startNow { startImport() }
             }
-        }
     }
 
     private func startImport() {
         guard !importing, !link.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         importing = true
         importError = nil
+        status = nil
         Task {
             do {
-                draft = try await LinkImport.draft(from: link)
+                let draft = try await LinkImport.draft(from: link) { text in
+                    Task { @MainActor in status = text }
+                }
+                onDraft(draft)
             } catch {
                 importError = error.localizedDescription
             }
             importing = false
+            status = nil
         }
     }
 }
@@ -510,20 +522,18 @@ struct ImportLinkView: View {
 /// Paste a recipe's text; Hearth reads the ingredient and step lists out of it and shows the
 /// review screen in the same sheet.
 struct PasteTextView: View {
-    let onSaved: (Recipe) -> Void
+    let onDraft: (RecipeDraft) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
-    @State private var draft: RecipeDraft?
+    @State private var reading = false
+    @State private var status: String?
 
-    init(initialText: String, onSaved: @escaping (Recipe) -> Void) {
-        self.onSaved = onSaved
+    init(initialText: String, onDraft: @escaping (RecipeDraft) -> Void) {
+        self.onDraft = onDraft
         _text = State(initialValue: initialText)
     }
 
     var body: some View {
-        if let draft {
-            RecipeEditorView(review: draft, onSaved: onSaved)
-        } else {
             NavigationStack {
                 Form {
                     Section {
@@ -540,12 +550,24 @@ struct PasteTextView: View {
                     }.warmRows()
                     Section {
                         Button {
-                            draft = LinkImport.draft(fromText: text)
+                            reading = true
+                            Task {
+                                let draft = await LinkImport.smartDraft(fromText: text, sourceName: "Pasted text") { line in
+                                    Task { @MainActor in status = line }
+                                }
+                                reading = false
+                                onDraft(draft)
+                            }
                         } label: {
-                            Text("Read recipe").font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent).frame(maxWidth: .infinity, minHeight: 44)
+                            HStack(spacing: 8) {
+                                if reading { ProgressView() }
+                                Text(reading ? (status ?? "Reading…") : "Read recipe")
+                                    .font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(reading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .listRowInsets(EdgeInsets())
                         .accessibilityIdentifier("pasteTextRead")
                     }.warmRows()
@@ -567,7 +589,6 @@ struct PasteTextView: View {
                     }
                 }
             }
-        }
     }
 }
 

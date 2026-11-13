@@ -11,6 +11,11 @@ enum PhotoStore {
     /// data isn't an image.
     static func jpeg(from data: Data) -> Data? {
         guard let image = thumbnail(of: data, maxPixel: maxPixel) else { return nil }
+        return jpeg(from: image)
+    }
+
+    /// A JPEG of an image already decoded (a video frame), at its own size.
+    static func jpeg(from image: CGImage) -> Data? {
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
         else { return nil }

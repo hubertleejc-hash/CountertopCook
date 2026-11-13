@@ -1,7 +1,7 @@
 # Hearth
 
 A small, personal iOS cooking app (formerly Countertop Cook; the bundle ID is unchanged).
-Local only: no account, no server, no AI. All text is English.
+Local only: no account, no server. Apple Intelligence, on the phone, only to write out recipes that are spoken or hard to read. All text is English.
 
 ## What it does
 
@@ -18,13 +18,24 @@ Local only: no account, no server, no AI. All text is English.
   cold grey: background #1C1712, recipe half #211B15, timers half #2A2118, cards #2E2720, text
   #F5EDE3, secondary text #C9BBA8, accent #F08A3C. It follows the phone, or the Light / Dark /
   System switch in the library. Tricolore strips and motifs are muted at night.
-- **Import from anywhere, reviewed before saving.**
+- **Import from anywhere, reviewed before saving.** When the plain reader can't find both an
+  ingredient list and steps (a video that only *says* the recipe, a busy photo), Apple
+  Intelligence on the phone (iOS 26+, where available) writes the recipe out from the text,
+  captions or speech, and the review screen says so. Nothing leaves the phone. When no recipe
+  can be found at all, a "Couldn't find the recipe" screen says why and offers the next way in
+  (screenshots, a saved video, pasting, or filling it in).
   - **+ → Import from a link.** A recipe page's link: only its schema.org Recipe data is read, never the story text.
   - A YouTube link, or Share → Hearth from the YouTube app: the video's title and description
     (and captions, when YouTube serves them).
   - A TikTok, Instagram, Facebook, Pinterest or other video or post link: the post's caption.
     Emoji headings and bullets ("📝 INGREDIENTS 👇", "🧄 2 cloves garlic", "1️⃣ Boil…") and
     hashtags are handled. A video that only *says* the recipe can't be read from its link.
+  - A YouTube video with no written recipe: its captions, or its sound heard on the phone
+    (speech recognition), then Apple Intelligence.
+  - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…): the words it
+    shows on screen and what it says.
+  - Chinese recipes: 食材 / 用料 / 调料 / 做法 / 步骤 headings, amounts such as 2块, 300g, 半根,
+    适量, 少许, a whole grid row on one line, and ①–⑨ / ❶ / 第1步 step numbers.
   - **+ → Import from photos / Scan a recipe page.** A cookbook page, a recipe card, a handwritten
     note, or screenshots of the recipe from a video. The text is read on the phone (Apple's Vision
     text recognition; two-column cards are read column by column). Several photos make one

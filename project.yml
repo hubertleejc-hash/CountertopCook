@@ -32,6 +32,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Hearth
         # Scan a recipe page (VisionKit's document camera).
         INFOPLIST_KEY_NSCameraUsageDescription: Hearth uses the camera to scan a recipe page and read its text.
+        # Listening to a cooking video (one saved to Photos, or a YouTube video's sound) on the phone.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Hearth listens to a cooking video to write out the recipe it says. This happens on your iPhone where the language allows.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -47,6 +49,8 @@ targets:
     platform: iOS
     # PhotoText reads the text of a shared screenshot or photo, as the app's photo import does.
     sources: [ShareExtension, App/PhotoText.swift]
+    dependencies:
+      - package: CookCore
     info:
       path: ShareExtension/Info.plist
       properties:

@@ -30,10 +30,10 @@ enum LinkImport {
     }
 
     /// Fetches the link and reads a draft from it.
-    static func draft(from text: String) async throws -> RecipeDraft {
+    static func draft(from text: String, progress: @escaping Progress = { _ in }) async throws -> RecipeDraft {
         let url = try link(from: text)
         if let video = YouTubePage.videoID(from: url) {
-            return try await youTubeDraft(videoID: video)
+            return try await youTubeDraft(videoID: video, progress: progress)
         }
         // Instagram, Facebook and Threads show browsers a sign-in page, but give link previews
         // (the caption and the photo) to the preview reader that chat apps use.
@@ -50,7 +50,7 @@ enum LinkImport {
         }
         if let video = YouTubePage.videoID(from: page) {
             // A short link that led to YouTube.
-            return try await youTubeDraft(videoID: video)
+            return try await youTubeDraft(videoID: video, progress: progress)
         }
         do {
             let imported = try RecipeImporter.parse(html: html, url: page)
@@ -100,15 +100,29 @@ enum LinkImport {
         let info = PageCaption.extract(html: html, page: page)
         guard let caption = info.text, !caption.isEmpty else { return nil }
         var imported = TextRecipeParser.parse(caption)
-        let nothingRead = imported.ingredients.isEmpty && imported.steps.isEmpty
-        if nothingRead && !isSocial(page) { return nil }
+        if !isSocial(page) && !anything(imported) { return nil }
+        var readBy: String?
+        if !complete(imported), let written = await RecipeAssistant.recipe(from: caption, title: nil),
+           written.steps.count >= imported.steps.count {
+            imported = written
+            readBy = "Apple Intelligence, from the post's caption"
+        }
+        let nothingRead = !anything(imported)
         // The caption's own first line names the dish more often than the page title does
         // ("cook on Instagram: …").
         if imported.title.isEmpty || nothingRead { imported.title = info.title ?? imported.title }
         var host = page.host ?? ""
         if host.hasPrefix("www.") { host.removeFirst(4) }
         var draft = RecipeDraft(imported: imported, sourceURL: page.absoluteString, sourceName: info.siteName ?? host,
-                                referenceText: nothingRead ? caption : nil)
+                                referenceText: caption)
+        draft.readBy = readBy
+        if nothingRead {
+            if case .unavailable(let why) = RecipeAssistant.status {
+                draft.emptyReason = "This post's caption doesn't list the ingredients and steps. " + why
+            } else {
+                draft.emptyReason = "This post's caption doesn't give the recipe, and the video's sound can't be reached from its link."
+            }
+        }
         draft.coverImage = await photo(at: RecipeImporter.imageURL(nil, html: html, page: page))
         return draft
     }
@@ -134,6 +148,40 @@ enum LinkImport {
                            referenceText: nothingRead ? text.trimmingCharacters(in: .whitespacesAndNewlines) : nil)
     }
 
+    /// Reads a draft from text (pasted, read from photos, or heard in a video). When the plain
+    /// reader can't find both an ingredient list and steps, Apple Intelligence writes the
+    /// recipe out from the text instead, where the phone has it.
+    /// `preferAssistant`: the text is speech or subtitles, which the plain reader can't follow,
+    /// so Apple Intelligence reads it first when the phone has it.
+    static func smartDraft(fromText text: String, title: String? = nil, sourceName: String, preferAssistant: Bool = false,
+                           progress: @escaping Progress = { _ in }) async -> RecipeDraft {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var imported = preferAssistant && RecipeAssistant.isAvailable
+            ? ImportedRecipe(title: "", servings: nil, totalMinutes: nil, ingredients: [], steps: [], siteName: "", cuisine: nil)
+            : TextRecipeParser.parse(trimmed)
+        var readBy: String?
+        if !complete(imported), RecipeAssistant.isAvailable {
+            progress("Writing out the recipe…")
+            if let written = await RecipeAssistant.recipe(from: trimmed, title: title),
+               written.steps.count >= imported.steps.count, written.ingredients.count + written.steps.count > 0 {
+                imported = written
+                readBy = "Apple Intelligence"
+            }
+        }
+        if let title, !title.isEmpty, imported.title.isEmpty { imported.title = title }
+        var draft = RecipeDraft(imported: imported, sourceURL: nil, sourceName: sourceName,
+                                referenceText: trimmed.isEmpty ? nil : trimmed)
+        draft.readBy = readBy
+        if !anything(imported) {
+            if case .unavailable(let why) = RecipeAssistant.status {
+                draft.emptyReason = "Hearth couldn't find an ingredient list or numbered steps here. " + why
+            } else {
+                draft.emptyReason = "Hearth couldn't find a recipe here."
+            }
+        }
+        return draft
+    }
+
     static func link(from text: String) throws -> URL {
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Shared text can be "Watch this: https://youtu.be/…"; take the link out of it.
@@ -150,93 +198,181 @@ enum LinkImport {
 
     // MARK: YouTube
 
-    private static func youTubeDraft(videoID: String) async throws -> RecipeDraft {
+    /// Status lines for the import screen while a long import runs ("Listening to the video…").
+    typealias Progress = @Sendable (String) -> Void
+
+    private static func complete(_ recipe: ImportedRecipe) -> Bool { !recipe.ingredients.isEmpty && !recipe.steps.isEmpty }
+    private static func anything(_ recipe: ImportedRecipe) -> Bool { !recipe.ingredients.isEmpty || !recipe.steps.isEmpty }
+
+    /// A YouTube video: the recipe as its description writes it; else as the video says it
+    /// (its captions, or its sound heard on the phone), written out by Apple Intelligence.
+    private static func youTubeDraft(videoID: String, progress: Progress) async throws -> RecipeDraft {
+        progress("Opening the video…")
         let watch = URL(string: "https://www.youtube.com/watch?v=\(videoID)")!
         var info = YouTubePage.Info()
         if let (html, _) = try? await fetch(watch, cookie: "SOCS=CAI") {
             info = YouTubePage.extract(html: html)
         }
-        if info.description == nil {
-            // The watch page sometimes comes back as a consent or "confirm you're not a bot" page
-            // without the video's details. YouTube's own player data has them too.
-            let player = await playerInfo(videoID: videoID)
-            info.title = info.title ?? player.title
-            info.channel = info.channel ?? player.channel
-            info.description = player.description
-            info.captionURL = info.captionURL ?? player.captionURL
-        }
+        // YouTube's own player data: the details when the watch page came back as a consent or
+        // "confirm you're not a bot" page, and the caption tracks and sound when needed.
+        let player = await playerData(videoID: videoID)
+        info.title = info.title ?? player.info.title
+        info.channel = info.channel ?? player.info.channel
+        info.description = info.description ?? player.info.description
+        info.captionURL = player.info.captionURL ?? info.captionURL
         if info.title == nil {
-            // At least the title, from YouTube's public oEmbed.
             let oembed = await oEmbed(videoID: videoID)
             info.title = oembed.title
             info.channel = info.channel ?? oembed.channel
         }
         guard info.title != nil || info.description != nil else { throw Failure.noVideoDetails }
 
-        let description = info.description ?? ""
+        let description = (info.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         var imported = TextRecipeParser.parse(description)
-        var reference: String?
-        if imported.ingredients.isEmpty && imported.steps.isEmpty {
-            // Nothing list-like in the description: try the captions, and either way show the
-            // source text for the reader to work from. Spoken captions are never turned into
-            // ingredients or steps by guesswork.
-            var transcript = ""
-            if let captions = info.captionURL, let (xml, _) = try? await fetch(captions, cookie: "SOCS=CAI") {
-                transcript = YouTubePage.transcript(xml: xml)
-                let fromCaptions = TextRecipeParser.parse(transcript)
-                if !fromCaptions.ingredients.isEmpty || !fromCaptions.steps.isEmpty { imported = fromCaptions }
+        var readBy: String?
+        var emptyReason: String?
+        var spoken = ""
+        if !complete(imported) {
+            if let captions = info.captionURL {
+                progress("Reading the video's captions…")
+                spoken = await captionText(captions)
             }
-            if imported.ingredients.isEmpty && imported.steps.isEmpty {
-                let parts = [description.trimmingCharacters(in: .whitespacesAndNewlines),
-                             transcript.isEmpty ? "" : "Captions:\n" + transcript]
-                reference = parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
-                if reference?.isEmpty == true {
-                    reference = "This video's description and captions don't give the recipe in writing. Take screenshots of the recipe as the video shows it and use + → Import from photos."
+            if spoken.isEmpty, let audio = player.audioURL, player.seconds <= 40 * 60 {
+                progress("Listening to the video…")
+                if let file = await download(audio, userAgent: player.userAgent) {
+                    let hint = (info.title ?? "") + description
+                    spoken = await SpeechText.transcribe(file, locale: SpeechText.locale(hint: hint)) ?? ""
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+            if !spoken.isEmpty {
+                let fromSpoken = TextRecipeParser.parse(spoken)
+                if complete(fromSpoken) { imported = fromSpoken; readBy = "the video's captions" }
+            }
+            if !complete(imported) {
+                switch RecipeAssistant.status {
+                case .available:
+                    progress("Writing out the recipe…")
+                    let text = [description, spoken.isEmpty ? "" : "What the video says:\n" + spoken]
+                        .filter { !$0.isEmpty }.joined(separator: "\n\n")
+                    if let written = await RecipeAssistant.recipe(from: text, title: info.title),
+                       written.steps.count >= imported.steps.count {
+                        imported = written
+                        readBy = spoken.isEmpty ? "Apple Intelligence, from the video's description"
+                                                : "Apple Intelligence, from what the video says"
+                    } else if !anything(imported) {
+                        emptyReason = spoken.isEmpty
+                            ? "This video doesn't write the recipe down, and Hearth couldn't get its captions or its sound."
+                            : "Hearth listened to this video but couldn't find a recipe in what it says."
+                    }
+                case .unavailable(let why):
+                    if !anything(imported) {
+                        emptyReason = spoken.isEmpty
+                            ? "This video doesn't write the recipe down, and Hearth couldn't get its captions or its sound."
+                            : "This video only says the recipe out loud. " + why
+                    }
                 }
             }
         }
         // The video's own title, not the description's first line.
         imported.title = info.title ?? imported.title
         let source = ["YouTube", info.channel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        var draft = RecipeDraft(imported: imported, sourceURL: watch.absoluteString, sourceName: source, referenceText: reference)
+        let reference = [description, spoken.isEmpty ? "" : "What the video says:\n" + spoken]
+            .filter { !$0.isEmpty }.joined(separator: "\n\n")
+        var draft = RecipeDraft(imported: imported, sourceURL: watch.absoluteString, sourceName: source,
+                                referenceText: reference.isEmpty ? nil : reference)
+        draft.readBy = readBy
+        draft.emptyReason = emptyReason
         // The video's own thumbnail, as YouTube publishes it for every video.
         draft.coverImage = await photo(at: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"))
         return draft
     }
 
-    /// The title, channel, description and caption track from YouTube's player data, as its
-    /// iPhone app asks for them. Empty when YouTube doesn't answer.
-    private static func playerInfo(videoID: String) async -> YouTubePage.Info {
-        var request = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")!,
-                                 timeoutInterval: 20)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
-                         forHTTPHeaderField: "User-Agent")
-        request.setValue("SOCS=CAI", forHTTPHeaderField: "Cookie")
-        let body: [String: Any] = [
-            "videoId": videoID,
-            "context": ["client": ["clientName": "IOS", "clientVersion": "19.45.4", "deviceMake": "Apple",
-                                   "deviceModel": "iPhone16,2", "osName": "iPhone", "osVersion": "18.1.0.22B83",
-                                   "hl": "en", "gl": "US"]],
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .init() }
+    private struct PlayerData {
         var info = YouTubePage.Info()
-        if let details = json["videoDetails"] as? [String: Any] {
-            info.title = (details["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-            info.channel = (details["author"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-            info.description = (details["shortDescription"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        var audioURL: URL?
+        var seconds = 0
+        var userAgent = ""
+    }
+
+    /// The video's details, caption track and sound from YouTube's player data, as its phone
+    /// apps ask for them (the iPhone app first, then the Android app).
+    private static func playerData(videoID: String) async -> PlayerData {
+        let clients: [(agent: String, client: [String: Any])] = [
+            ("com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
+             ["clientName": "IOS", "clientVersion": "19.45.4", "deviceMake": "Apple", "deviceModel": "iPhone16,2",
+              "osName": "iPhone", "osVersion": "18.1.0.22B83", "hl": "en", "gl": "US"]),
+            ("com.google.android.youtube/19.44.38 (Linux; U; Android 14) gzip",
+             ["clientName": "ANDROID", "clientVersion": "19.44.38", "androidSdkVersion": 34, "osName": "Android",
+              "osVersion": "14", "hl": "en", "gl": "US"]),
+        ]
+        var result = PlayerData()
+        for (agent, client) in clients {
+            var request = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")!,
+                                     timeoutInterval: 20)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(agent, forHTTPHeaderField: "User-Agent")
+            request.setValue("SOCS=CAI", forHTTPHeaderField: "Cookie")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: ["videoId": videoID, "context": ["client": client]])
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            if let details = json["videoDetails"] as? [String: Any] {
+                result.info.title = result.info.title ?? (details["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                result.info.channel = result.info.channel ?? (details["author"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                result.info.description = result.info.description
+                    ?? (details["shortDescription"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                if let seconds = Int(details["lengthSeconds"] as? String ?? "") { result.seconds = seconds }
+            }
+            if result.info.captionURL == nil {
+                let tracks = ((json["captions"] as? [String: Any])?["playerCaptionsTracklistRenderer"] as? [String: Any])?["captionTracks"]
+                    as? [[String: Any]] ?? []
+                // Captions someone wrote before automatic ones, in the video's own language.
+                let track = tracks.first { ($0["kind"] as? String) != "asr" } ?? tracks.first
+                if let address = track?["baseUrl"] as? String {
+                    result.info.captionURL = URL(string: address.hasPrefix("/") ? "https://www.youtube.com" + address : address)
+                }
+            }
+            if result.audioURL == nil,
+               let formats = (json["streamingData"] as? [String: Any])?["adaptiveFormats"] as? [[String: Any]] {
+                let audio = formats.filter { ($0["mimeType"] as? String)?.hasPrefix("audio/mp4") == true && $0["url"] != nil }
+                let pick = audio.first { ($0["itag"] as? Int) == 140 } ?? audio.first
+                if let address = pick?["url"] as? String, let url = URL(string: address) {
+                    result.audioURL = url
+                    result.userAgent = agent
+                }
+            }
+            if result.info.description != nil, result.info.captionURL != nil || result.audioURL != nil { break }
         }
-        let tracks = ((json["captions"] as? [String: Any])?["playerCaptionsTracklistRenderer"] as? [String: Any])?["captionTracks"]
-            as? [[String: Any]] ?? []
-        let track = tracks.first { ($0["languageCode"] as? String)?.hasPrefix("en") == true } ?? tracks.first
-        if let address = track?["baseUrl"] as? String {
-            info.captionURL = URL(string: address.hasPrefix("/") ? "https://www.youtube.com" + address : address)
+        return result
+    }
+
+    /// The captions as text: YouTube's JSON captions, else its timed-text XML.
+    private static func captionText(_ url: URL) async -> String {
+        if var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "fmt" } + [URLQueryItem(name: "fmt", value: "json3")]
+            if let json = parts.url, let (data, response) = try? await URLSession.shared.data(from: json),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                let text = YouTubePage.transcript(json3: data)
+                if !text.isEmpty { return text }
+            }
         }
-        return info
+        if let (xml, _) = try? await fetch(url, cookie: "SOCS=CAI") { return YouTubePage.transcript(xml: xml) }
+        return ""
+    }
+
+    /// The video's sound, saved to a temporary .m4a; nil when YouTube won't hand it over.
+    private static func download(_ url: URL, userAgent: String) async -> URL? {
+        var request = URLRequest(url: url, timeoutInterval: 60)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        guard let (file, response) = try? await URLSession.shared.download(for: request),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false else { return nil }
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
+        guard (try? FileManager.default.moveItem(at: file, to: target)) != nil else { return nil }
+        let size = (try? FileManager.default.attributesOfItem(atPath: target.path)[.size] as? Int) ?? 0
+        guard size > 10_000 else { try? FileManager.default.removeItem(at: target); return nil }
+        return target
     }
 
     private static func oEmbed(videoID: String) async -> (title: String?, channel: String?) {

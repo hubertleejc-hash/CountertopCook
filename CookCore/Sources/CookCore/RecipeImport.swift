@@ -28,6 +28,13 @@ public struct ImportedRecipe: Equatable {
     /// The recipe's own photo, as the source publishes it (schema.org image, else the page's
     /// og:image); nil when it has none. Only a picture the source gives, never a stock one.
     public var imageURL: URL? = nil
+
+    public init(title: String, servings: Int?, totalMinutes: Int?, ingredients: [Ingredient], steps: [String],
+                siteName: String, cuisine: String?, category: String? = nil, imageURL: URL? = nil) {
+        self.title = title; self.servings = servings; self.totalMinutes = totalMinutes
+        self.ingredients = ingredients; self.steps = steps; self.siteName = siteName
+        self.cuisine = cuisine; self.category = category; self.imageURL = imageURL
+    }
 }
 
 public enum RecipeImportError: Error, Equatable, LocalizedError {
