@@ -64,7 +64,7 @@ struct ImportSheet: View {
 
     private func choices(_ origin: Origin) -> [ImportHelpView.Choice] {
         switch origin {
-        case .link: return [.photos, .video, .paste, .manual, .retry]
+        case .link: return [.video, .photos, .paste, .manual, .retry]
         case .paste: return [.photos, .manual]
         case .photos: return [.photos, .paste, .manual]
         case .video: return [.photos, .manual]

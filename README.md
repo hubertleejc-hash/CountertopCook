@@ -30,10 +30,12 @@ Local only: no account, no server. Apple Intelligence, on the phone, only to wri
   - A TikTok, Instagram, Facebook, Pinterest or other video or post link: the post's caption.
     Emoji headings and bullets ("📝 INGREDIENTS 👇", "🧄 2 cloves garlic", "1️⃣ Boil…") and
     hashtags are handled. A video that only *says* the recipe can't be read from its link.
-  - A YouTube video with no written recipe: its captions, or its sound heard on the phone
-    (speech recognition), then Apple Intelligence.
-  - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…): the words it
-    shows on screen and what it says.
+  - A YouTube video with no written recipe: its captions (from the public watch page), then
+    Apple Intelligence. The video itself is never downloaded; for a video with no captions,
+    Hearth suggests a screen recording and Import a saved video.
+  - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…) or a screen
+    recording of one playing: the words it shows on screen and what it says (speech recognition
+    on the phone).
   - Chinese recipes: 食材 / 用料 / 调料 / 做法 / 步骤 headings, amounts such as 2块, 300g, 半根,
     适量, 少许, a whole grid row on one line, and ①–⑨ / ❶ / 第1步 step numbers.
   - **+ → Import from photos / Scan a recipe page.** A cookbook page, a recipe card, a handwritten

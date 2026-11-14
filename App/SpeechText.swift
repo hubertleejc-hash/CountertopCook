@@ -3,7 +3,7 @@ import Speech
 import AVFoundation
 
 /// What a cooking video says, as text: Apple's speech recognition, on the phone where the
-/// language allows it. Used for a video saved to Photos and for a YouTube video's audio.
+/// language allows it. Used for a video saved to Photos or a screen recording of one.
 enum SpeechText {
     /// Asks for speech recognition the first time; true when allowed.
     static func authorized() async -> Bool {

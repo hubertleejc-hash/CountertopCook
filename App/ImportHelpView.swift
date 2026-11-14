@@ -55,8 +55,8 @@ struct ImportHelpView: View {
                         "Pause the video where it shows the ingredients and steps, take screenshots, and Hearth reads them.",
                         "photo.on.rectangle.angled")
             case .video:
-                return ("Import a saved video",
-                        "A video saved to Photos: Hearth reads its on-screen text and listens to it.",
+                return ("Import a saved video or screen recording",
+                        "Save the video, or screen-record it playing (Control Center → Screen Recording). Hearth listens to it and reads its subtitles.",
                         "film")
             case .paste:
                 return ("Paste the recipe text", "Copy the recipe from anywhere and paste it in.", "doc.on.clipboard")
