@@ -201,13 +201,18 @@ enum LinkImport {
             info.title = oembed.title
             info.channel = info.channel ?? oembed.channel
         }
-        guard info.title != nil || info.description != nil else { throw Failure.noVideoDetails }
+        // With a Gemini key the video itself can be read even when its page couldn't be.
+        guard info.title != nil || info.description != nil || OnlineVideoReader.hasKey else { throw Failure.noVideoDetails }
 
         let description = (info.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         var imported = TextRecipeParser.parse(description)
         var readBy: String?
         var emptyReason: String?
         var spoken = ""
+        let record = "screen-record the video (Control Center → Screen Recording) while it plays, then choose Import a saved video: Hearth listens to the recording and reads its subtitles."
+        let onlySpoken = "This video says the recipe out loud but doesn't write it down or have captions. "
+            + (OnlineVideoReader.hasKey ? "To read it here, " + record
+                                        : "Choose Read videos online to have Gemini watch it for you, or " + record)
         if !complete(imported) {
             if let captions = info.captionURL {
                 progress("Reading the video's captions…")
@@ -217,7 +222,25 @@ enum LinkImport {
                 let fromSpoken = TextRecipeParser.parse(spoken)
                 if complete(fromSpoken) { imported = fromSpoken; readBy = "the video's captions" }
             }
-            if !complete(imported) {
+            // Online: Gemini watches the video on Google's servers, with the cook's own key.
+            if !complete(imported), OnlineVideoReader.hasKey {
+                progress("Watching the video online…")
+                do {
+                    if let watched = try await OnlineVideoReader.recipe(youTube: watch),
+                       complete(watched) || watched.steps.count >= imported.steps.count {
+                        imported.ingredients = watched.ingredients
+                        imported.steps = watched.steps
+                        imported.servings = watched.servings ?? imported.servings
+                        if imported.title.isEmpty { imported.title = watched.title }
+                        readBy = "Gemini (Google), from the video"
+                    } else if !anything(imported) {
+                        emptyReason = "Gemini watched this video but found no recipe in it."
+                    }
+                } catch {
+                    emptyReason = error.localizedDescription
+                }
+            }
+            if !complete(imported), readBy == nil {
                 switch RecipeAssistant.status {
                 // Only with something recipe-like to work from: a description that is just a
                 // story must not become a recipe written from the video's title.
@@ -231,17 +254,17 @@ enum LinkImport {
                         readBy = spoken.isEmpty ? "Apple Intelligence, from the video's description"
                                                 : "Apple Intelligence, from what the video says"
                     } else if !anything(imported) {
-                        emptyReason = spoken.isEmpty
-                            ? "This video says the recipe out loud but doesn't write it down or have captions. Screen-record the video (Control Center → Screen Recording) while it plays, then choose Import a saved video: Hearth listens to the recording and reads its subtitles."
-                            : "Hearth listened to this video but couldn't find a recipe in what it says."
+                        emptyReason = emptyReason ?? (spoken.isEmpty
+                            ? onlySpoken
+                            : "Hearth listened to this video but couldn't find a recipe in what it says.")
                     }
                 case .available:
-                    emptyReason = "This video says the recipe out loud but doesn't write it down or have captions. Screen-record the video (Control Center → Screen Recording) while it plays, then choose Import a saved video: Hearth listens to the recording and reads its subtitles."
+                    emptyReason = emptyReason ?? onlySpoken
                 case .unavailable(let why):
                     if !anything(imported) {
-                        emptyReason = spoken.isEmpty
-                            ? "This video says the recipe out loud but doesn't write it down or have captions. Screen-record the video (Control Center → Screen Recording) while it plays, then choose Import a saved video: Hearth listens to the recording and reads its subtitles."
-                            : "This video only says the recipe out loud. " + why
+                        emptyReason = emptyReason ?? (spoken.isEmpty
+                            ? onlySpoken
+                            : "This video only says the recipe out loud. " + why)
                     }
                 }
             }

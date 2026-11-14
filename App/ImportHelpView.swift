@@ -3,7 +3,7 @@ import SwiftUI
 /// Shown instead of an empty review screen when an import found no recipe: says why in a
 /// sentence, and offers the next ways to get it, the most likely to work first.
 struct ImportHelpView: View {
-    enum Choice { case photos, video, paste, manual, retry }
+    enum Choice { case online, photos, video, paste, manual, retry }
 
     let reason: String
     /// The ways offered, in order.
@@ -50,6 +50,10 @@ struct ImportHelpView: View {
     private func row(_ choice: Choice) -> some View {
         let (title, detail, symbol): (String, String, String) = {
             switch choice {
+            case .online:
+                return ("Read videos online",
+                        "Add a free Gemini key once, and Google's Gemini watches YouTube videos for Hearth and writes out the recipe.",
+                        "sparkles.tv")
             case .photos:
                 return ("Import from screenshots",
                         "Pause the video where it shows the ingredients and steps, take screenshots, and Hearth reads them.",

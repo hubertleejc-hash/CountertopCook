@@ -483,6 +483,17 @@ struct ImportLinkView: View {
                         .listRowInsets(EdgeInsets())
                         .accessibilityIdentifier("importButton")
                     }.warmRows()
+                    Section {
+                        NavigationLink {
+                            GeminiKeyView()
+                        } label: {
+                            Label("Read videos online", systemImage: "sparkles.tv")
+                        }
+                        .disabled(importing)
+                        .accessibilityIdentifier("readOnlineSettings")
+                    } footer: {
+                        Text("For YouTube videos that only say the recipe out loud: with your own free Gemini key, Google's Gemini watches the video and writes the recipe out.")
+                    }.warmRows()
                 }
                 .warmList()
                 .navigationTitle("Import Link")

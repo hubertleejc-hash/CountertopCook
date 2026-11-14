@@ -9,6 +9,7 @@ struct ImportSheet: View {
         case paste(String)
         case photos(scan: Bool)
         case video
+        case onlineKey(String)
         case help(RecipeDraft, from: Origin)
         case review(RecipeDraft)
     }
@@ -36,9 +37,19 @@ struct ImportSheet: View {
                 PhotoImportView(scanNow: scan) { received($0, from: .photos) }
             case .video:
                 VideoImportView { received($0, from: .video) }
+            case .onlineKey(let link):
+                NavigationStack {
+                    GeminiKeyView { go(.link(link, start: true)) }
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Back") { go(.link(link, start: false)) }
+                            }
+                        }
+                }
             case .help(let draft, from: let origin):
-                ImportHelpView(reason: draft.emptyReason ?? defaultReason(origin), choices: choices(origin)) { choice in
+                ImportHelpView(reason: draft.emptyReason ?? defaultReason(origin), choices: choices(origin, draft)) { choice in
                     switch choice {
+                    case .online: go(.onlineKey(draft.sourceURL ?? ""))
                     case .photos: go(.photos(scan: false))
                     case .video: go(.video)
                     case .paste: go(.paste(""))
@@ -62,9 +73,11 @@ struct ImportSheet: View {
         go(draft.foundNothing ? .help(draft, from: origin) : .review(draft))
     }
 
-    private func choices(_ origin: Origin) -> [ImportHelpView.Choice] {
+    private func choices(_ origin: Origin, _ draft: RecipeDraft) -> [ImportHelpView.Choice] {
         switch origin {
-        case .link: return [.video, .photos, .paste, .manual, .retry]
+        case .link:
+            let youTube = (draft.sourceURL ?? "").contains("youtube.com/watch")
+            return (youTube && !OnlineVideoReader.hasKey ? [.online] : []) + [.video, .photos, .paste, .manual, .retry]
         case .paste: return [.photos, .manual]
         case .photos: return [.photos, .paste, .manual]
         case .video: return [.photos, .manual]

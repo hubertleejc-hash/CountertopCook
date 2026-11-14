@@ -33,6 +33,12 @@ Local only: no account, no server. Apple Intelligence, on the phone, only to wri
   - A YouTube video with no written recipe: its captions (from the public watch page), then
     Apple Intelligence. The video itself is never downloaded; for a video with no captions,
     Hearth suggests a screen recording and Import a saved video.
+  - **Read videos online** (optional, Import from a link → Read videos online): with the cook's
+    own free Gemini API key (aistudio.google.com/apikey, kept in the iPhone's Keychain), a
+    YouTube video whose recipe is only spoken is sent by link to Google's Gemini API, which
+    watches it (picture and sound) on Google's servers and returns the recipe. Hearth still
+    never downloads the video. Xiaohongshu and Douyin offer no such route; use their Save video
+    button and Import a saved video. The model is set in `App/OnlineVideoReader.swift`.
   - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…) or a screen
     recording of one playing: the words it shows on screen and what it says (speech recognition
     on the phone).
