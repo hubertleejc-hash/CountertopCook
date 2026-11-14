@@ -8,7 +8,7 @@ import CookCore
 /// Import a cooking video saved to Photos (from Xiaohongshu, Douyin, TikTok, Instagram or the
 /// camera). Hearth reads the text the video shows on screen (subtitles, ingredient cards) and
 /// listens to what it says, all on the phone, and Apple Intelligence writes the recipe out
-/// for the review screen.
+/// for the review screen. With a Gemini key (and the cook's consent), Gemini reads it instead.
 struct VideoImportView: View {
     let onDraft: (RecipeDraft) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -16,6 +16,9 @@ struct VideoImportView: View {
     @State private var reading = false
     @State private var status: String?
     @State private var readError: String?
+    /// A video waiting for the cook's answer to the Gemini notice.
+    @State private var awaitingConsent: PhotosPickerItem?
+    @State private var hasKey = OnlineVideoReader.hasKey
 
     var body: some View {
         NavigationStack {
@@ -46,7 +49,21 @@ struct VideoImportView: View {
                 } header: {
                     Text("Video")
                 } footer: {
-                    Text("A cooking video saved to Photos. Hearth reads the words it shows on screen and listens to what it says, on this iPhone, then writes out the recipe for you to check. A few minutes of video takes about a minute.")
+                    Text(hasKey
+                         ? "A cooking video saved to Photos. Google's Gemini watches it and writes out the recipe for you to check; without a connection, Hearth reads it on this iPhone."
+                         : "A cooking video saved to Photos. Hearth reads the words it shows on screen and listens to what it says, on this iPhone, then writes out the recipe for you to check. A few minutes of video takes about a minute.")
+                }.warmRows()
+                Section {
+                    NavigationLink {
+                        GeminiKeyView()
+                    } label: {
+                        Label(hasKey ? "Read videos online: on" : "Read videos online", systemImage: "sparkles.tv")
+                    }
+                    .disabled(reading)
+                } footer: {
+                    if !hasKey {
+                        Text("With your own free Gemini key, Google's Gemini watches the video, which reads spoken Chinese and on-screen text better than the phone can.")
+                    }
                 }.warmRows()
             }
             .warmList()
@@ -58,14 +75,34 @@ struct VideoImportView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .onAppear { hasKey = OnlineVideoReader.hasKey }
             .onChange(of: picked) { _, item in
                 guard let item else { return }
-                read(item)
+                if OnlineVideoReader.hasKey && !OnlineVideoReader.uploadAgreed {
+                    awaitingConsent = item
+                } else {
+                    read(item, online: OnlineVideoReader.hasKey)
+                }
+            }
+            .alert("Send this video to Gemini?", isPresented: Binding(
+                get: { awaitingConsent != nil }, set: { if !$0 { awaitingConsent = nil } })) {
+                Button("Send to Gemini") {
+                    OnlineVideoReader.uploadAgreed = true
+                    if let item = awaitingConsent { read(item, online: true) }
+                    awaitingConsent = nil
+                }
+                Button("Read on this iPhone") {
+                    if let item = awaitingConsent { read(item, online: false) }
+                    awaitingConsent = nil
+                }
+                Button("Cancel", role: .cancel) { awaitingConsent = nil; picked = nil }
+            } message: {
+                Text(OnlineVideoReader.uploadNotice)
             }
         }
     }
 
-    private func read(_ item: PhotosPickerItem) {
+    private func read(_ item: PhotosPickerItem, online: Bool) {
         guard !reading else { return }
         reading = true
         readError = nil
@@ -78,10 +115,28 @@ struct VideoImportView: View {
             }
             defer { try? FileManager.default.removeItem(at: movie.url) }
             let report: LinkImport.Progress = { line in Task { @MainActor in status = line } }
+            var onlineProblem: String?
+            if online {
+                do {
+                    if let watched = try await OnlineVideoReader.recipe(videoFile: movie.url, progress: report) {
+                        var draft = RecipeDraft(imported: watched, sourceURL: nil, sourceName: "Video")
+                        draft.readBy = "Gemini (Google), from the video"
+                        draft.coverImage = await VideoText.cover(of: movie.url)
+                        onDraft(draft)
+                        return
+                    }
+                    onlineProblem = "Gemini found no recipe in this video."
+                } catch {
+                    onlineProblem = error.localizedDescription
+                }
+                // Fall back to reading it on the phone.
+                report("Reading it on this iPhone instead…")
+            }
             let content = await VideoText.read(movie.url, progress: report)
             guard !content.onScreen.isEmpty || !content.speech.isEmpty else {
                 var draft = RecipeDraft(imported: TextRecipeParser.parse(""), sourceURL: nil, sourceName: "Video")
-                draft.emptyReason = "Hearth couldn't find any words in this video: nothing on screen, and no speech it could make out."
+                draft.emptyReason = [onlineProblem, "Hearth couldn't find any words in this video: nothing on screen, and no speech it could make out."]
+                    .compactMap { $0 }.joined(separator: " ")
                 draft.coverImage = content.cover
                 onDraft(draft)
                 return
@@ -91,6 +146,7 @@ struct VideoImportView: View {
                 .filter { !$0.isEmpty }.joined(separator: "\n\n")
             var draft = await LinkImport.smartDraft(fromText: text, sourceName: "Video", preferAssistant: true, progress: report)
             if draft.readBy != nil { draft.readBy = "Apple Intelligence, from what the video shows and says" }
+            if let onlineProblem, let reason = draft.emptyReason { draft.emptyReason = onlineProblem + " " + reason }
             draft.coverImage = content.cover
             onDraft(draft)
         }
@@ -121,6 +177,18 @@ enum VideoText {
         var speech = ""
         /// A frame near the end, where cooking videos show the finished dish, as a JPEG.
         var cover: Data?
+    }
+
+    /// A frame near the end, where cooking videos show the finished dish, as a JPEG.
+    static func cover(of url: URL) async -> Data? {
+        let asset = AVURLAsset(url: url)
+        let seconds = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 1280, height: 1280)
+        guard let frame = try? await generator.image(at: CMTime(seconds: seconds * 0.92, preferredTimescale: 600)).image else { return nil }
+        return PhotoStore.jpeg(from: frame)
     }
 
     static func read(_ url: URL, progress: LinkImport.Progress) async -> Content {

@@ -14,7 +14,7 @@ struct GeminiKeyView: View {
     var body: some View {
         Form {
             Section {
-                Text("Hearth can send a YouTube link to Google's Gemini, which watches the video, listens to what is said and reads its subtitles, then hands back the recipe. Only the link goes to Google; the video is never downloaded.")
+                Text("Hearth can ask Google's Gemini to watch a cooking video, listen to what is said and read its subtitles, then hand back the recipe. For a YouTube link only the link goes to Google; the video is never downloaded. A video saved on this iPhone (from Xiaohongshu, Douyin and others) is sent to Google, after you agree, and deleted there once read. On Gemini's free tier, Google may use what you send to improve its products.")
                     .font(Theme.body(15, relativeTo: .body))
                     .foregroundStyle(Theme.ink)
             }.warmRows()

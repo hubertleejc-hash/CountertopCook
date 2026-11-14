@@ -38,7 +38,9 @@ Local only: no account, no server. Apple Intelligence, on the phone, only to wri
     YouTube video whose recipe is only spoken is sent by link to Google's Gemini API, which
     watches it (picture and sound) on Google's servers and returns the recipe. Hearth still
     never downloads the video. Xiaohongshu and Douyin offer no such route; use their Save video
-    button and Import a saved video. The model is set in `App/OnlineVideoReader.swift`.
+    button and Import a saved video. With a key, Import a saved video uploads the file to
+    Gemini (after a one-time notice that the free tier may use it to improve Google's products),
+    deletes it there once read, and falls back to reading on the phone if Gemini can't. The model is set in `App/OnlineVideoReader.swift`.
   - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…) or a screen
     recording of one playing: the words it shows on screen and what it says (speech recognition
     on the phone).
