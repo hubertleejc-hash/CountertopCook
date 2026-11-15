@@ -40,6 +40,7 @@ enum LinkImport {
             (html, page) = try await fetch(url)
         } catch where isSocial(url) {
             // Some sites show posts only to signed-in visitors.
+            if let guide = savedVideoDraft(url) { return guide }
             throw Failure.nothingToRead
         }
         if let video = YouTubePage.videoID(from: page) {
@@ -54,6 +55,7 @@ enum LinkImport {
         } catch RecipeImportError.noRecipeData {
             // No recipe card: a video or post. Read its caption instead.
             if let draft = await captionDraft(html: html, page: page) { return draft }
+            if let guide = savedVideoDraft(page) ?? savedVideoDraft(url) { return guide }
             if isSocial(page) || isSocial(url) { throw Failure.nothingToRead }
             throw RecipeImportError.noRecipeData
         }
@@ -63,13 +65,41 @@ enum LinkImport {
 
     private static let socialHosts = ["tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
                                       "pinterest.com", "pin.it", "xiaohongshu.com", "xhslink.com", "threads.net",
-                                      "x.com", "twitter.com", "douyin.com", "vimeo.com", "reddit.com"]
+                                      "x.com", "twitter.com", "douyin.com", "iesdouyin.com", "vimeo.com", "reddit.com"]
 
     private static func isSocial(_ url: URL) -> Bool {
         let host = url.host?.lowercased() ?? ""
         return socialHosts.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
+
+    /// The video apps whose posts can't be read from a link, and how to save a video in each.
+    private static func videoApp(_ url: URL) -> (name: String, save: String)? {
+        let host = url.host?.lowercased() ?? ""
+        func on(_ domains: [String]) -> Bool { domains.contains { host == $0 || host.hasSuffix("." + $0) } }
+        if on(["xiaohongshu.com", "xhslink.com"]) {
+            return ("Xiaohongshu (小红书)", "open the post in Xiaohongshu, tap Share (分享) and choose Save video (保存视频)")
+        }
+        if on(["douyin.com", "iesdouyin.com"]) {
+            return ("Douyin (抖音)", "open the video in Douyin, tap Share (分享) and choose Save to device (保存本地)")
+        }
+        if on(["tiktok.com"]) { return ("TikTok", "open the video in TikTok, tap Share and choose Save video") }
+        if on(["instagram.com"]) { return ("Instagram", "save the reel with Share → Download, or screen-record it while it plays") }
+        if on(["facebook.com", "fb.com", "fb.watch"]) { return ("Facebook", "screen-record the video while it plays (Control Center → Screen Recording)") }
+        return nil
+    }
+
+    /// For a video app whose post couldn't be read: the "couldn't find" screen, saying how to
+    /// save the video there and offering Import a saved video first.
+    private static func savedVideoDraft(_ url: URL) -> RecipeDraft? {
+        guard let app = videoApp(url) else { return nil }
+        var draft = RecipeDraft(imported: TextRecipeParser.parse(""), sourceURL: url.absoluteString, sourceName: app.name)
+        draft.emptyReason = "\(app.name) doesn't let other apps read its posts from a link. To get the recipe, "
+            + app.save + ", then come back and choose Import a saved video: "
+            + (OnlineVideoReader.hasKey ? "Gemini watches it and writes out the recipe."
+                                        : "Hearth reads its subtitles and listens to it.")
+        return draft
+    }
 
     /// The post's caption as a draft: its lists when it has them, else the caption itself beside
     /// the empty form. Nil when the page has no caption to read. On a site that isn't a video or
@@ -101,7 +131,8 @@ enum LinkImport {
             if case .unavailable(let why) = RecipeAssistant.status {
                 draft.emptyReason = "This post's caption doesn't list the ingredients and steps. " + why
             } else {
-                draft.emptyReason = "This post's caption doesn't give the recipe. Save the video, or screen-record it while it plays, then choose Import a saved video: Hearth listens to it and reads its subtitles."
+                draft.emptyReason = savedVideoDraft(page)?.emptyReason.map { "This post's caption doesn't give the recipe. " + $0 }
+                    ?? "This post's caption doesn't give the recipe. Save the video, or screen-record it while it plays, then choose Import a saved video: Hearth listens to it and reads its subtitles."
             }
         }
         draft.coverImage = await photo(at: RecipeImporter.imageURL(nil, html: html, page: page))

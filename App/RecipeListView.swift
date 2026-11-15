@@ -468,7 +468,7 @@ struct ImportLinkView: View {
                     } header: {
                         Text("Link")
                     } footer: {
-                        Text("A recipe page, or a video from YouTube, TikTok, Instagram or Facebook whose description or caption gives the recipe. You review every import before it is saved. From any app, you can also use Share and choose Hearth.")
+                        Text("A recipe page, a YouTube video, or a TikTok, Instagram or Facebook post whose caption gives the recipe. For Xiaohongshu and Douyin, save the video in the app and use Import a saved video. You review every import before it is saved.")
                     }.warmRows()
                     Section {
                         Button(action: startImport) {
