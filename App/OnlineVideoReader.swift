@@ -254,14 +254,14 @@ enum OnlineVideoReader {
             let n = (value as? NSNumber)?.intValue ?? Int(string(value)) ?? 0
             return n > 0 ? n : nil
         }
-        func text(_ value: Any?) -> String? {
+        func optionalText(_ value: Any?) -> String? {
             let t = string(value)
             return t.isEmpty ? nil : t
         }
         // totalMinutes, cuisine and category come only from Create with AI; a video's answer has none.
         return ImportedRecipe(title: string(object["title"]), servings: number(object["servings"]),
                               totalMinutes: number(object["totalMinutes"]), ingredients: ingredients, steps: steps,
-                              siteName: "", cuisine: text(object["cuisine"]), category: text(object["category"]))
+                              siteName: "", cuisine: optionalText(object["cuisine"]), category: optionalText(object["category"]))
     }
 }
 
