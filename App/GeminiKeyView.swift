@@ -10,6 +10,8 @@ struct GeminiKeyView: View {
     @Environment(\.openURL) private var openURL
     @State private var key = ""
     @State private var hasKey = OnlineVideoReader.hasKey
+    @State private var checking = false
+    @State private var keyError: String?
 
     var body: some View {
         Form {
@@ -29,6 +31,12 @@ struct GeminiKeyView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("geminiKey")
+                if let keyError {
+                    Text(keyError)
+                        .font(Theme.body(13, relativeTo: .footnote))
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("geminiKeyError")
+                }
             } header: {
                 Text("Your Gemini key")
             } footer: {
@@ -36,12 +44,15 @@ struct GeminiKeyView: View {
             }.warmRows()
             Section {
                 Button(action: save) {
-                    Text(onSaved == nil ? "Save" : "Save and read the video")
-                        .font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                    HStack(spacing: 8) {
+                        if checking { ProgressView() }
+                        Text(checking ? "Checking the key…" : onSaved == nil ? "Save" : "Save and read the video")
+                            .font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(checking || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .listRowInsets(EdgeInsets())
                 .accessibilityIdentifier("geminiSave")
                 if hasKey {
@@ -60,9 +71,18 @@ struct GeminiKeyView: View {
     }
 
     private func save() {
-        OnlineVideoReader.saveKey(key)
-        key = ""
-        hasKey = OnlineVideoReader.hasKey
-        if let onSaved { onSaved() } else { dismiss() }
+        checking = true
+        keyError = nil
+        Task {
+            defer { checking = false }
+            if let problem = await OnlineVideoReader.problem(withKey: key) {
+                keyError = problem
+                return
+            }
+            OnlineVideoReader.saveKey(key)
+            key = ""
+            hasKey = OnlineVideoReader.hasKey
+            if let onSaved { onSaved() } else { dismiss() }
+        }
     }
 }

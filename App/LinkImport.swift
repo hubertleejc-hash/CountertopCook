@@ -95,7 +95,7 @@ enum LinkImport {
         guard let app = videoApp(url) else { return nil }
         var draft = RecipeDraft(imported: TextRecipeParser.parse(""), sourceURL: url.absoluteString, sourceName: app.name)
         draft.emptyReason = "\(app.name) doesn't let other apps read its posts from a link. To get the recipe, "
-            + app.save + ", then come back and choose Import a saved video: "
+            + app.save + ". If it won't save, screen-record it while it plays (Control Center → Screen Recording). Then come back and choose Import a saved video: "
             + (OnlineVideoReader.hasKey ? "Gemini watches it and writes out the recipe."
                                         : "Hearth reads its subtitles and listens to it.")
         return draft

@@ -24,8 +24,31 @@ enum OnlineVideoReader {
 
     /// Where to get a key, for the settings screen.
     static let keyPage = URL(string: "https://aistudio.google.com/apikey")!
-    /// The model asked; a newer Flash model can be set here when Google retires this one.
-    static let model = "gemini-3.8-flash"
+    /// The models tried, in order: when Google retires one, the next still answers.
+    static let models = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.6-flash"]
+
+    /// Checks a key before it is saved: nil when Gemini accepts it, else what's wrong.
+    static func problem(withKey key: String) async -> String? {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        var request = URLRequest(url: URL(string: "\(api)/v1beta/models?pageSize=1")!, timeoutInterval: 30)
+        request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            return "Couldn't reach Google to check the key. Check the internet connection and try again."
+        }
+        do {
+            try check(response, data)
+        } catch let failure as Failure {
+            return "Google didn't accept this key: " + reason(failure)
+        } catch {
+            return "Google didn't accept this key: " + error.localizedDescription
+        }
+        return nil
+    }
+
+    private static func reason(_ failure: Failure) -> String {
+        if case .refused(let message) = failure { return message }
+        return failure.localizedDescription
+    }
 
     static var hasKey: Bool { !(Keychain.read() ?? "").isEmpty }
 
@@ -115,23 +138,41 @@ enum OnlineVideoReader {
 
     private static func generate(video: [String: String]) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
-        var request = URLRequest(
-            url: URL(string: "\(api)/v1beta/models/\(model):generateContent")!,
-            timeoutInterval: 180)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt], ["file_data": video]]]],
             "generationConfig": ["responseMimeType": "application/json", "temperature": 0.1],
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try check(response, data)
-        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let text = ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
-            .flatMap { $0 as? [[String: Any]] }?.compactMap { $0["text"] as? String }.joined() ?? ""
-        return try parse(text)
+        var lastError: Error = Failure.unreadable
+        for model in models {
+            // A busy or rate-limited answer is tried once more after a pause.
+            for attempt in 0..<2 {
+                var request = URLRequest(url: URL(string: "\(api)/v1beta/models/\(model):generateContent")!,
+                                         timeoutInterval: 300)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 200 {
+                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    let text = ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
+                        .flatMap { $0 as? [[String: Any]] }?.compactMap { $0["text"] as? String }.joined() ?? ""
+                    return try parse(text)
+                }
+                do { try check(response, data) } catch { lastError = error }
+                if [429, 500, 503].contains(status) && attempt == 0 {
+                    try await Task.sleep(for: .seconds(4))
+                    continue
+                }
+                break
+            }
+            // Only a model Google no longer offers moves on to the next one.
+            guard case Failure.refused(let message) = lastError,
+                  message.contains("not found") || message.contains("is not supported") || message.contains("HTTP 404")
+            else { throw lastError }
+        }
+        throw lastError
     }
 
     /// Throws Google's own message for a failed request.
