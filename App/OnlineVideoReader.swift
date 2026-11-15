@@ -71,7 +71,10 @@ enum OnlineVideoReader {
     servings is 0 when the video doesn't say. If the video has no recipe, answer with empty lists.
     """
 
-    private static let api = "https://generativelanguage.googleapis.com"
+    static let api = "https://generativelanguage.googleapis.com"
+
+    /// The saved key, for the other Gemini features (Create with AI).
+    static var savedKey: String? { Keychain.read().flatMap { $0.isEmpty ? nil : $0 } }
 
     /// The recipe in the YouTube video at `url`; nil when the video has none.
     static func recipe(youTube url: URL, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
@@ -213,7 +216,7 @@ enum OnlineVideoReader {
     }
 
     /// Throws Google's own message for a failed request.
-    private static func check(_ response: URLResponse, _ data: Data) throws {
+    static func check(_ response: URLResponse, _ data: Data) throws {
         guard let status = (response as? HTTPURLResponse)?.statusCode, status != 200 else { return }
         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? "HTTP \(status)"
@@ -247,9 +250,18 @@ enum OnlineVideoReader {
         }
         let steps = (object["steps"] as? [Any] ?? []).map(string).filter { !$0.isEmpty }
         guard !ingredients.isEmpty || !steps.isEmpty else { return nil }
-        let servings = (object["servings"] as? NSNumber)?.intValue ?? Int(string(object["servings"])) ?? 0
-        return ImportedRecipe(title: string(object["title"]), servings: servings > 0 ? servings : nil, totalMinutes: nil,
-                              ingredients: ingredients, steps: steps, siteName: "", cuisine: nil)
+        func number(_ value: Any?) -> Int? {
+            let n = (value as? NSNumber)?.intValue ?? Int(string(value)) ?? 0
+            return n > 0 ? n : nil
+        }
+        func text(_ value: Any?) -> String? {
+            let t = string(value)
+            return t.isEmpty ? nil : t
+        }
+        // totalMinutes, cuisine and category come only from Create with AI; a video's answer has none.
+        return ImportedRecipe(title: string(object["title"]), servings: number(object["servings"]),
+                              totalMinutes: number(object["totalMinutes"]), ingredients: ingredients, steps: steps,
+                              siteName: "", cuisine: text(object["cuisine"]), category: text(object["category"]))
     }
 }
 

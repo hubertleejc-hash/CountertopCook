@@ -288,6 +288,39 @@ final class CountertopCookUITests: XCTestCase {
         snapshot("import-error")
     }
 
+    // MARK: Create with AI: a new recipe, in Chinese, reviewed before saving
+
+    func testCreateWithAIIsReviewedBeforeSaving() {
+        app.terminate()
+        app.launchEnvironment["COOK_FAKE_AI"] = "1"
+        app.launch()
+        chooseAdd("menuCreateAI", titled: "Create with AI")
+        let idea = element("createIdea")
+        XCTAssertTrue(idea.waitForExistence(timeout: 5), "Create with AI didn't open")
+        XCTAssertFalse(element("createGo").isEnabled, "Create is possible with an empty request")
+        // The example chips fill the request (and avoid typing Chinese on the test keyboard).
+        app.buttons["番茄炒蛋"].firstMatch.tap()
+        snapshot("create-ai")
+        scrollTo("createGo").tap()
+
+        XCTAssertTrue(element("reviewCreatedBy").waitForExistence(timeout: 10), "No review screen for a created recipe")
+        XCTAssertTrue(element("reviewCreatedBy").label.contains("Created by Gemini"), element("reviewCreatedBy").label)
+        XCTAssertEqual(element("recipeTitle").value as? String, "番茄炒蛋")
+        XCTAssertFalse(element("reviewMissing").exists, "A created recipe was compared with a source")
+        snapshot("create-ai-review")
+
+        // Back to the request, kept as typed, then write it again and save.
+        element("reviewRedo").tap()
+        XCTAssertTrue(element("createIdea").waitForExistence(timeout: 5), "Write a different one didn't go back")
+        XCTAssertEqual(element("createIdea").value as? String, "番茄炒蛋")
+        scrollTo("createGo").tap()
+        XCTAssertTrue(element("reviewCreatedBy").waitForExistence(timeout: 10))
+        saveForm()
+        XCTAssertTrue(element("startCooking").waitForExistence(timeout: 10), "Saving the created recipe didn't open it")
+        XCTAssertEqual(element("recipeSource").label, "Source: Created with Gemini")
+        app.launchEnvironment["COOK_FAKE_AI"] = nil
+    }
+
     // MARK: Import from pasted text: review screen, nothing invented, auto-timers
 
     func testPastedTextIsReviewedBeforeSaving() {
