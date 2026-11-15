@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-ipa-${{ github.ref }}
@@ -82,3 +82,13 @@ jobs:
           path: CountertopCook.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish as the "latest-build" pre-release (a plain download link, no sign-in)
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Unsigned test build of Hearth from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}. Sign and install it with Sideloadly."
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build CountertopCook.ipa --prerelease --target "$GITHUB_SHA" \
+            --title "Latest test build (${GITHUB_REF_NAME})" --notes "$NOTES"
