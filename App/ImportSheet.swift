@@ -54,7 +54,7 @@ struct ImportSheet: View {
                     case .video: go(.video)
                     case .paste: go(.paste(""))
                     case .manual: go(.review(draft))
-                    case .retry: go(.link("", start: false))
+                    case .retry: go(.link(draft.sourceURL ?? "", start: false))
                     }
                 }
             case .review(let draft):

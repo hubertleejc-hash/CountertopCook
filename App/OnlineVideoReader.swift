@@ -12,12 +12,14 @@ enum OnlineVideoReader {
         case noKey
         case refused(String)
         case unreadable
+        case connection
 
         var errorDescription: String? {
             switch self {
             case .noKey: return "Add a Gemini API key to read videos online."
             case .refused(let reason): return "Gemini couldn't read this video: \(reason)"
             case .unreadable: return "Gemini's answer couldn't be read."
+            case .connection: return "The connection to Gemini kept dropping while it watched the video. Try again on Wi-Fi, or with a stronger signal."
             }
         }
     }
@@ -72,13 +74,13 @@ enum OnlineVideoReader {
     private static let api = "https://generativelanguage.googleapis.com"
 
     /// The recipe in the YouTube video at `url`; nil when the video has none.
-    static func recipe(youTube url: URL) async throws -> ImportedRecipe? {
-        try await generate(video: ["file_uri": url.absoluteString])
+    static func recipe(youTube url: URL, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
+        try await generate(video: ["file_uri": url.absoluteString], progress: progress)
     }
 
     /// The recipe in a video file on the phone (one saved from Xiaohongshu, Douyin or another
     /// app, or a screen recording): uploaded to Gemini's file store, read, then deleted there.
-    static func recipe(videoFile file: URL, progress: @Sendable (String) -> Void) async throws -> ImportedRecipe? {
+    static func recipe(videoFile file: URL, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
         let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue ?? 0
         guard size > 0 else { throw Failure.refused("the video file is empty.") }
@@ -95,7 +97,7 @@ enum OnlineVideoReader {
         start.setValue(mime, forHTTPHeaderField: "X-Goog-Upload-Header-Content-Type")
         start.setValue("application/json", forHTTPHeaderField: "Content-Type")
         start.httpBody = try JSONSerialization.data(withJSONObject: ["file": ["display_name": "Hearth recipe video"]])
-        let (startData, startResponse) = try await URLSession.shared.data(for: start)
+        let (startData, startResponse) = try await session.data(for: start)
         try check(startResponse, startData)
         guard let uploadURL = (startResponse as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Goog-Upload-URL")
                 .flatMap(URL.init(string:)) else { throw Failure.unreadable }
@@ -106,7 +108,7 @@ enum OnlineVideoReader {
         upload.setValue(String(size), forHTTPHeaderField: "Content-Length")
         upload.setValue("0", forHTTPHeaderField: "X-Goog-Upload-Offset")
         upload.setValue("upload, finalize", forHTTPHeaderField: "X-Goog-Upload-Command")
-        let (uploadData, uploadResponse) = try await URLSession.shared.upload(for: upload, fromFile: file)
+        let (uploadData, uploadResponse) = try await session.upload(for: upload, fromFile: file)
         try check(uploadResponse, uploadData)
         guard let uploaded = (try? JSONSerialization.jsonObject(with: uploadData) as? [String: Any])?["file"] as? [String: Any],
               let name = uploaded["name"] as? String, let uri = uploaded["uri"] as? String else { throw Failure.unreadable }
@@ -128,44 +130,79 @@ enum OnlineVideoReader {
             waited += 3
             var poll = URLRequest(url: URL(string: "\(api)/v1beta/\(name)")!, timeoutInterval: 30)
             poll.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-            let (pollData, pollResponse) = try await URLSession.shared.data(for: poll)
+            let (pollData, pollResponse) = try await session.data(for: poll)
             try check(pollResponse, pollData)
             state = (try? JSONSerialization.jsonObject(with: pollData) as? [String: Any])?["state"] as? String ?? "FAILED"
         }
         guard state == "ACTIVE" else { throw Failure.refused("Google couldn't open this video.") }
-        return try await generate(video: ["file_uri": uri, "mime_type": mime])
+        return try await generate(video: ["file_uri": uri, "mime_type": mime], progress: progress)
     }
 
-    private static func generate(video: [String: String]) async throws -> ImportedRecipe? {
+    /// A session that waits out long answers: watching a video can take minutes.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 300
+        configuration.timeoutIntervalForResource = 900
+        configuration.waitsForConnectivity = true
+        return URLSession(configuration: configuration)
+    }()
+
+    private static func generate(video: [String: String], progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt], ["file_data": video]]]],
-            "generationConfig": ["responseMimeType": "application/json", "temperature": 0.1],
+            // Low resolution frames: plenty to read on-screen text, and much quicker to watch.
+            "generationConfig": ["responseMimeType": "application/json", "temperature": 0.1,
+                                 "mediaResolution": "MEDIA_RESOLUTION_LOW"],
         ]
+        // Shows the time spent, so a long wait doesn't look stuck.
+        let started = Date()
+        let ticker = Task {
+            while !Task.isCancelled {
+                let seconds = Int(Date().timeIntervalSince(started))
+                progress(seconds < 5 ? "Gemini is watching the video…"
+                         : String(format: "Gemini is watching the video… %d:%02d", seconds / 60, seconds % 60))
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        defer { ticker.cancel() }
         var lastError: Error = Failure.unreadable
         for model in models {
-            // A busy or rate-limited answer is tried once more after a pause.
-            for attempt in 0..<2 {
-                var request = URLRequest(url: URL(string: "\(api)/v1beta/models/\(model):generateContent")!,
-                                         timeoutInterval: 300)
+            // A dropped connection or a busy answer is tried again, up to three times in all.
+            for attempt in 0..<3 {
+                if attempt > 0 { try await Task.sleep(for: .seconds(3 * attempt)) }
+                // Streamed, so bytes keep flowing while Gemini watches: a silent connection
+                // held for minutes is what mobile networks drop ("connection was lost").
+                var request = URLRequest(url: URL(string: "\(api)/v1beta/models/\(model):streamGenerateContent?alt=sse")!)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                let (data, response) = try await URLSession.shared.data(for: request)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if status == 200 {
-                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                    let text = ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
-                        .flatMap { $0 as? [[String: Any]] }?.compactMap { $0["text"] as? String }.joined() ?? ""
-                    return try parse(text)
-                }
-                do { try check(response, data) } catch { lastError = error }
-                if [429, 500, 503].contains(status) && attempt == 0 {
-                    try await Task.sleep(for: .seconds(4))
+                do {
+                    let (bytes, response) = try await session.bytes(for: request)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    if status == 200 {
+                        var text = ""
+                        for try await line in bytes.lines where line.hasPrefix("data:") {
+                            let chunk = Data(line.dropFirst(5).utf8)
+                            let json = try? JSONSerialization.jsonObject(with: chunk) as? [String: Any]
+                            if let error = json?["error"] as? [String: Any] {
+                                throw Failure.refused(error["message"] as? String ?? "Gemini stopped answering.")
+                            }
+                            text += ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
+                                .flatMap { $0 as? [[String: Any]] }?.compactMap { $0["text"] as? String }.joined() ?? ""
+                        }
+                        return try parse(text)
+                    }
+                    var data = Data()
+                    for try await byte in bytes { data.append(byte) }
+                    do { try check(response, data) } catch { lastError = error }
+                    if [429, 500, 503, 504].contains(status) { continue }
+                    break
+                } catch let error as URLError where error.code != .cancelled {
+                    lastError = Failure.connection
                     continue
                 }
-                break
             }
             // Only a model Google no longer offers moves on to the next one.
             guard case Failure.refused(let message) = lastError,

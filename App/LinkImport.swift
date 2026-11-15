@@ -220,7 +220,7 @@ enum LinkImport {
     /// written out by Apple Intelligence. Only what YouTube's public watch page offers is read:
     /// the video itself is never downloaded. For a video with no captions, the "couldn't find"
     /// screen suggests a screen recording, which Import a saved video can listen to.
-    private static func youTubeDraft(videoID: String, progress: Progress) async throws -> RecipeDraft {
+    private static func youTubeDraft(videoID: String, progress: @escaping Progress) async throws -> RecipeDraft {
         progress("Opening the video…")
         let watch = URL(string: "https://www.youtube.com/watch?v=\(videoID)")!
         var info = YouTubePage.Info()
@@ -255,9 +255,8 @@ enum LinkImport {
             }
             // Online: Gemini watches the video on Google's servers, with the cook's own key.
             if !complete(imported), OnlineVideoReader.hasKey {
-                progress("Watching the video online…")
                 do {
-                    if let watched = try await OnlineVideoReader.recipe(youTube: watch),
+                    if let watched = try await OnlineVideoReader.recipe(youTube: watch, progress: progress),
                        complete(watched) || watched.steps.count >= imported.steps.count {
                         imported.ingredients = watched.ingredients
                         imported.steps = watched.steps

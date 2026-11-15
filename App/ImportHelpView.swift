@@ -68,7 +68,7 @@ struct ImportHelpView: View {
                 return ("Fill it in myself", "Open the form with the title and photo, and the source's text to copy from.",
                         "square.and.pencil")
             case .retry:
-                return ("Try another link", "", "link")
+                return ("Try again, or another link", "", "arrow.clockwise")
             }
         }()
         return HStack(alignment: .top, spacing: 12) {
