@@ -36,9 +36,16 @@ struct RecipeEditorView: View {
                             Label("Check this against the original before saving.", systemImage: "checkmark.seal")
                                 .font(Theme.body(17, bold: true))
                                 .foregroundStyle(Theme.navy)
-                            Text("Nothing was guessed. Anything the source didn't give is left blank for you to fill in or leave.")
-                                .font(Theme.body(15, relativeTo: .subheadline))
-                                .foregroundStyle(.secondary)
+                            if let readBy = draft.readBy {
+                                Text("Written out by \(readBy). Check every amount and step against the original: it can mishear or misread.")
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("reviewReadBy")
+                            } else {
+                                Text("Nothing was guessed. Anything the source didn't give is left blank for you to fill in or leave.")
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .foregroundStyle(.secondary)
+                            }
                             if !draft.notInSource.isEmpty {
                                 Text("Not in the source: \(draft.notInSource.joined(separator: ", ")).")
                                     .font(Theme.body(15, bold: true, relativeTo: .subheadline))
@@ -71,18 +78,19 @@ struct RecipeEditorView: View {
                         }.warmRows()
                     }
                     if let reference = draft.referenceText, !reference.isEmpty {
-                        Section("From the source") {
-                            Text("No ingredient or step list could be read from this. Here is its text to work from:")
-                                .font(Theme.body(15, relativeTo: .subheadline))
-                                .foregroundStyle(.secondary)
-                            ScrollView {
-                                Text(reference)
-                                    .font(Theme.body(15, relativeTo: .subheadline))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                        Section {
+                            // Folded away: the recipe is above; this is only there to check against.
+                            DisclosureGroup("The source's own text") {
+                                ScrollView {
+                                    Text(reference)
+                                        .font(Theme.body(15, relativeTo: .subheadline))
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(maxHeight: 260)
+                                .accessibilityIdentifier("reviewReference")
                             }
-                            .frame(maxHeight: 220)
-                            .accessibilityIdentifier("reviewReference")
+                            .accessibilityIdentifier("reviewReferenceToggle")
                         }.warmRows()
                     }
                 }

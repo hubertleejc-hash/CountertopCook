@@ -1,9 +1,10 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Hearth in the iOS Share Sheet. Takes the shared link (a YouTube video, a recipe page) or
-/// text and hands it to the app as `hearth://import?url=…` or `?text=…`; the app then fetches,
-/// reads and shows its review screen. Nothing is saved here.
+/// Hearth in the iOS Share Sheet. Takes the shared link (a video, a recipe page) or text and
+/// hands it to the app as `hearth://import?url=…` or `?text=…`; the app then fetches, reads and
+/// shows its review screen. Shared photos or screenshots of a recipe are read here, on the
+/// phone (PhotoText), and their text is handed over as `?text=…&source=photo`. Nothing is saved here.
 ///
 /// A share extension has no official way to open its own app, so this walks the responder chain
 /// to the host's `openURL:options:completionHandler:`. If that ever stops working, the shared
@@ -40,7 +41,49 @@ final class ShareViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         loadSharedContent { [weak self] link, text in
-            DispatchQueue.main.async { self?.handOff(link: link, text: text) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if link == nil, (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, self.hasImages {
+                    self.readImages()
+                } else {
+                    self.handOff(link: link, text: text)
+                }
+            }
+        }
+    }
+
+    private var imageProviders: [NSItemProvider] {
+        (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
+            .filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+    }
+
+    private var hasImages: Bool { !imageProviders.isEmpty }
+
+    /// Reads the text of the shared photos, in the order shared, and hands it to the app.
+    private func readImages() {
+        label.text = "Reading the recipe…"
+        let providers = Array(imageProviders.prefix(10))
+        var pictures = [Data?](repeating: nil, count: providers.count)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        for (index, provider) in providers.enumerated() {
+            group.enter()
+            _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                lock.lock(); pictures[index] = data; lock.unlock()
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                do {
+                    // Smaller than in the app: a share extension has little memory to work in.
+                    let text = try await PhotoText.text(inImageData: pictures.compactMap { $0 }, maxPixel: 2200)
+                    self.handOff(link: nil, text: text, source: "photo")
+                } catch {
+                    self.finish(message: error.localizedDescription)
+                }
+            }
         }
     }
 
@@ -68,7 +111,7 @@ final class ShareViewController: UIViewController {
         group.notify(queue: .main) { done(link, text) }
     }
 
-    private func handOff(link: URL?, text: String?) {
+    private func handOff(link: URL?, text: String?, source: String? = nil) {
         var components = URLComponents()
         components.scheme = "hearth"
         components.host = "import"
@@ -80,6 +123,7 @@ final class ShareViewController: UIViewController {
         } else if !trimmed.isEmpty {
             // Keep the hand-off small; long text is pasted in the app instead.
             components.queryItems = [URLQueryItem(name: "text", value: String(trimmed.prefix(6000)))]
+                + (source.map { [URLQueryItem(name: "source", value: $0)] } ?? [])
             UIPasteboard.general.string = trimmed
         } else {
             finish(message: "Nothing to import here. Share a link or some text.")

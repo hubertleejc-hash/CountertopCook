@@ -190,6 +190,14 @@ struct RecipeDraft: Equatable {
     /// the cover of the recipe's book.
     var coverImage: Data?
     var useCoverImage = true
+    /// Import review only: who wrote the recipe out when the source only said it in prose
+    /// ("Apple Intelligence, from what the video says"), so the review screen can say so.
+    var readBy: String?
+    /// Import only: why no recipe could be found, for the "couldn't find it" screen.
+    var emptyReason: String?
+
+    /// An import that found neither ingredients nor steps.
+    var foundNothing: Bool { notInSource.contains("ingredients") && notInSource.contains("steps") }
 
     init() {}
 
