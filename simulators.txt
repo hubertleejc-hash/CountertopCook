@@ -1,0 +1,1 @@
+Duo|359A77B3-47DF-4B3D-BA78-86B7CD2ED783|iPhone Duo (iOS 27.1)|platform=iOS Simulator,OS=27.1,name=iPhone Duo
