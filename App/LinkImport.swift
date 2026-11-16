@@ -270,7 +270,9 @@ enum LinkImport {
                     emptyReason = error.localizedDescription
                 }
             }
-            if !complete(imported), readBy == nil {
+            // After Gemini has tried, the phone's own model isn't asked as well: it would only
+            // add another long wait for a weaker answer.
+            if !complete(imported), readBy == nil, !OnlineVideoReader.hasKey {
                 switch RecipeAssistant.status {
                 // Only with something recipe-like to work from: a description that is just a
                 // story must not become a recipe written from the video's title.

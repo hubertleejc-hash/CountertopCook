@@ -13,12 +13,14 @@ enum OnlineVideoReader {
         case refused(String)
         case unreadable
         case connection
+        case slow
 
         var errorDescription: String? {
             switch self {
             case .noKey: return "Add a Gemini API key to read videos online."
             case .refused(let reason): return "Gemini couldn't read this video: \(reason)"
             case .unreadable: return "Gemini's answer couldn't be read."
+            case .slow: return "Gemini took too long to watch this video. Try again in a minute, or on Wi-Fi."
             case .connection: return "The connection to Gemini kept dropping while it watched the video. Try again on Wi-Fi, or with a stronger signal."
             }
         }
@@ -149,12 +151,17 @@ enum OnlineVideoReader {
 
     private static func generate(video: [String: String], progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "contents": [["parts": [["text": prompt], ["file_data": video]]]],
             // Low resolution frames: plenty to read on-screen text, and much quicker to watch.
             "generationConfig": ["responseMimeType": "application/json", "temperature": 0.1,
-                                 "mediaResolution": "MEDIA_RESOLUTION_LOW"],
+                                 "mediaResolution": "MEDIA_RESOLUTION_LOW",
+                                 // Writing out a recipe needs little reasoning; long thinking
+                                 // was most of the wait.
+                                 "thinkingConfig": ["thinkingLevel": "low"]],
         ]
+        // Give up after four minutes in all, rather than retrying for a quarter of an hour.
+        let deadline = Date().addingTimeInterval(240)
         // Shows the time spent, so a long wait doesn't look stuck.
         let started = Date()
         let ticker = Task {
@@ -170,6 +177,7 @@ enum OnlineVideoReader {
         for model in models {
             // A dropped connection or a busy answer is tried again, up to three times in all.
             for attempt in 0..<3 {
+                guard Date() < deadline else { throw Failure.slow }
                 if attempt > 0 { try await Task.sleep(for: .seconds(3 * attempt)) }
                 // Streamed, so bytes keep flowing while Gemini watches: a silent connection
                 // held for minutes is what mobile networks drop ("connection was lost").
@@ -197,6 +205,13 @@ enum OnlineVideoReader {
                     var data = Data()
                     for try await byte in bytes { data.append(byte) }
                     do { try check(response, data) } catch { lastError = error }
+                    // A model that doesn't take a thinking level is asked again without one.
+                    if status == 400, case Failure.refused(let message) = lastError, message.lowercased().contains("thinking"),
+                       var config = body["generationConfig"] as? [String: Any], config["thinkingConfig"] != nil {
+                        config["thinkingConfig"] = nil
+                        body["generationConfig"] = config
+                        continue
+                    }
                     if [429, 500, 503, 504].contains(status) { continue }
                     break
                 } catch let error as URLError where error.code != .cancelled {
