@@ -11,6 +11,8 @@ struct CreateRecipeView: View {
     @AppStorage("createEngine") private var chosen = RecipeCreator.Engine.gemini.rawValue
     @State private var writing = false
     @State private var problem: String?
+    /// What has been written so far, while it is written.
+    @State private var status: String?
     @FocusState private var typing: Bool
 
     init(request: RecipeCreator.Request, onDraft: @escaping (RecipeDraft, RecipeCreator.Request) -> Void) {
@@ -79,8 +81,11 @@ struct CreateRecipeView: View {
                         Button(action: create) {
                             HStack(spacing: 8) {
                                 if writing { ProgressView() }
-                                Text(writing ? "Writing with \(engine?.rawValue ?? "AI")…" : "Create recipe")
+                                Text(writing ? (status ?? "Writing with \(engine?.rawValue ?? "AI")…") : "Create recipe")
                                     .font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.8)
+                                    .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -109,7 +114,13 @@ struct CreateRecipeView: View {
             .navigationTitle("Create with AI")
             .navigationBarTitleDisplayMode(.inline)
             .font(Theme.body())
-            .onAppear { engines = RecipeCreator.engines }
+            .onAppear {
+                engines = RecipeCreator.engines
+                if engine == .apple { RecipeCreator.prewarm(request) }
+            }
+            .onChange(of: typing) { _, now in
+                if now, engine == .apple { RecipeCreator.prewarm(request) }
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -151,10 +162,13 @@ struct CreateRecipeView: View {
         typing = false
         writing = true
         problem = nil
+        status = nil
         Task {
-            defer { writing = false }
+            defer { writing = false; status = nil }
             do {
-                let draft = try await RecipeCreator.create(request, with: engine)
+                let draft = try await RecipeCreator.create(request, with: engine) { line in
+                    Task { @MainActor in if writing { status = line } }
+                }
                 onDraft(draft, request)
             } catch {
                 problem = error.localizedDescription
