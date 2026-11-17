@@ -72,7 +72,7 @@ enum RecipeCreator {
     typealias Progress = @Sendable (String) -> Void
 
     static func progressLine(title: String, ingredients: Int, steps: Int, seconds: Int) -> String {
-        var line = title.isEmpty ? "Thinking about the recipe…" : "Writing \(title)…"
+        var line = title.isEmpty ? "Writing the recipe…" : "Writing \(title)…"
         if steps > 0 { line += " \(ingredients) ingredients, \(steps) steps" }
         else if ingredients > 0 { line += " \(ingredients) ingredients" }
         if seconds >= 3 { line += " · \(seconds)s" }
@@ -131,99 +131,16 @@ enum RecipeCreator {
 
     private static func gemini(_ idea: String, _ request: Request, _ progress: @escaping Progress) async throws -> ImportedRecipe? {
         guard let key = OnlineVideoReader.savedKey else { throw Failure.noEngine }
-        var config: [String: Any] = ["responseMimeType": "application/json", "responseSchema": schema,
-                                     // A recipe needs knowledge, not long reasoning: low thinking answers in seconds.
-                                     "thinkingConfig": ["thinkingLevel": "low"]]
-        let started = Date()
-        var lastError: Error = Failure.nothing
-        for model in OnlineVideoReader.models {
-            for attempt in 0..<3 {
-                if attempt > 0 { try await Task.sleep(for: .seconds(2 * attempt)) }
-                let body: [String: Any] = [
-                    "systemInstruction": ["parts": [["text": instructions(request)]]],
-                    "contents": [["role": "user", "parts": [["text": idea]]]],
-                    "generationConfig": config,
-                ]
-                // Streamed, so the recipe shows up as it is written.
-                var call = URLRequest(url: URL(string: "\(OnlineVideoReader.api)/v1beta/models/\(model):streamGenerateContent?alt=sse")!,
-                                      timeoutInterval: 90)
-                call.httpMethod = "POST"
-                call.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                call.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-                call.httpBody = try JSONSerialization.data(withJSONObject: body)
-                let ticker = Task {
-                    while !Task.isCancelled {
-                        progress(progressLine(title: "", ingredients: 0, steps: 0, seconds: Int(Date().timeIntervalSince(started))))
-                        try? await Task.sleep(for: .seconds(1))
-                    }
-                }
-                do {
-                    let (bytes, response) = try await URLSession.shared.bytes(for: call)
-                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    if status == 200 {
-                        var text = ""
-                        for try await line in bytes.lines where line.hasPrefix("data:") {
-                            let json = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any]
-                            if let error = json?["error"] as? [String: Any] {
-                                ticker.cancel()
-                                throw Failure.refused("Gemini stopped answering: \(error["message"] as? String ?? "")")
-                            }
-                            text += ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
-                                .flatMap { $0 as? [[String: Any]] }?
-                                .filter { ($0["thought"] as? Bool) != true }
-                                .compactMap { $0["text"] as? String }.joined() ?? ""
-                            if !text.isEmpty {
-                                ticker.cancel()
-                                progress(partialProgress(text, seconds: Int(Date().timeIntervalSince(started))))
-                            }
-                        }
-                        ticker.cancel()
-                        return try OnlineVideoReader.parse(text)
-                    }
-                    ticker.cancel()
-                    var data = Data()
-                    for try await byte in bytes { data.append(byte) }
-                    do { try OnlineVideoReader.check(response, data) } catch { lastError = error }
-                    // An older model that doesn't know a setting: try again without the extras.
-                    if status == 400, case OnlineVideoReader.Failure.refused(let message) = lastError,
-                       message.localizedCaseInsensitiveContains("thinking") || message.localizedCaseInsensitiveContains("schema") {
-                        config = ["responseMimeType": "application/json"]
-                        continue
-                    }
-                    if [429, 500, 503, 504].contains(status) { continue }
-                    break
-                } catch let error as URLError where error.code != .cancelled {
-                    ticker.cancel()
-                    lastError = Failure.refused("Couldn't reach Gemini. Check the internet connection and try again.")
-                    continue
-                }
+        let shape = "\n" + #"Answer with JSON only, in this shape: {"title": "", "ingredients": [{"amount": "", "unit": "", "name": ""}], "steps": [""], "totalMinutes": 0, "category": "food, drinks or desserts", "cuisine": "one English word"}"#
+        let ask = GeminiJob.Ask(prompt: idea, system: instructions(request) + shape, video: nil, schema: schema, seconds: 90)
+        do {
+            let text = try await GeminiJob.answer(ask, key: key) { seconds in
+                progress(progressLine(title: "", ingredients: 0, steps: 0, seconds: seconds))
             }
-            // Only a model Google no longer offers moves on to the next one.
-            guard case OnlineVideoReader.Failure.refused(let message) = lastError,
-                  message.contains("not found") || message.contains("is not supported") || message.contains("HTTP 404")
-            else { break }
+            return try OnlineVideoReader.parse(text)
+        } catch GeminiJob.Failure.refused(let reason) {
+            throw Failure.refused("Gemini couldn't write this recipe: \(reason)")
         }
-        if let failure = lastError as? OnlineVideoReader.Failure, case .refused(let message) = failure {
-            throw Failure.refused("Gemini couldn't write this recipe: \(message)")
-        }
-        throw lastError
-    }
-
-    /// What a half-written JSON answer has so far: its title and how many ingredients and steps.
-    static func partialProgress(_ text: String, seconds: Int) -> String {
-        var title = ""
-        if let range = text.range(of: #""title"\s*:\s*"([^"]*)""#, options: .regularExpression) {
-            title = String(text[range]).components(separatedBy: "\"").dropLast().last ?? ""
-        }
-        let ingredients = text.components(separatedBy: "\"name\"").count - 1
-        var steps = 0
-        if let open = text.range(of: "\"steps\"") {
-            // Each step is a string: count the ones started so far.
-            let list = text[open.upperBound...].prefix { $0 != "]" }
-            let quotes = list.filter { $0 == "\"" }.count
-            steps = (quotes + 1) / 2
-        }
-        return progressLine(title: title, ingredients: ingredients, steps: steps, seconds: seconds)
     }
 
     // MARK: Apple Intelligence
