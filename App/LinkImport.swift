@@ -261,6 +261,7 @@ enum LinkImport {
                         imported.ingredients = watched.ingredients
                         imported.steps = watched.steps
                         imported.servings = watched.servings ?? imported.servings
+                        imported.totalMinutes = watched.totalMinutes ?? imported.totalMinutes
                         if imported.title.isEmpty { imported.title = watched.title }
                         readBy = "Gemini (Google), from the video"
                     } else if !anything(imported) {
