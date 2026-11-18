@@ -32,6 +32,8 @@ enum GeminiJob {
         /// Google couldn't be reached at all; carries the phone's own description of why.
         case unreachable(String)
         case slow(Int)
+        /// Every model Google offers was too busy to take the job.
+        case busy
         case unreadable
 
         var errorDescription: String? {
@@ -40,14 +42,21 @@ enum GeminiJob {
             case .unreachable(let why): return "Couldn't reach Gemini (\(why)). Check the internet connection and try again."
             case .slow(let seconds):
                 return "Gemini hadn't finished after \(seconds >= 120 ? "\(seconds / 60) minutes" : "\(seconds) seconds"). Google may be busy: try again in a minute."
+            case .busy: return "Gemini is very busy right now and none of its models would take this. Google's free tier gets crowded: try again in a minute."
             case .unreadable: return "Gemini's answer couldn't be read. Try again."
             }
         }
     }
 
-    /// The models tried, in order. Each has its own free allowance, so when one is used up,
-    /// busy or retired, the next still answers.
-    static let models = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+    /// The models, fastest first. On Google's free tier the newest model is often overloaded
+    /// (answers come back "high demand" or never), while the lite models answer in seconds and
+    /// read a recipe just as well. The last is an alias that keeps working when a name is retired.
+    static let models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash",
+                         "gemini-flash-lite-latest"]
+
+    /// If a model hasn't answered in this many seconds, the next one is started beside it and
+    /// whichever answers first is used.
+    private static let hedge: Duration = .seconds(12)
 
     private static let api = "https://generativelanguage.googleapis.com"
 
@@ -65,7 +74,15 @@ enum GeminiJob {
         return URLSession(configuration: configuration)
     }()
 
+    private enum Outcome {
+        case answer(String)
+        case failed(Error)
+        case slowStart
+    }
+
     /// Gemini's answer text. `tick` is called every second with the seconds waited so far.
+    /// Models are started one after another, and the next one is also started when the last
+    /// is slow, so one overloaded model never holds the answer up.
     static func answer(_ ask: Ask, key: String, tick: @escaping @Sendable (Int) -> Void) async throws -> String {
         let started = Date()
         let deadline = started.addingTimeInterval(ask.seconds)
@@ -76,22 +93,64 @@ enum GeminiJob {
             }
         }
         defer { ticker.cancel() }
-        var lastReason = ""
-        for model in models {
-            do {
-                do {
-                    return try await background(ask, model: model, key: key, deadline: deadline)
-                } catch Detour.streamed(let reason) {
-                    lastReason = reason
-                    return try await streamed(ask, model: model, key: key, deadline: deadline)
+        return try await withThrowingTaskGroup(of: Outcome.self) { group in
+            var next = 0
+            var running = 0
+            var failures: [Error] = []
+            func launch() {
+                guard next < models.count else { return }
+                let model = models[next]
+                next += 1
+                running += 1
+                group.addTask {
+                    do { return .answer(try await attempt(ask, model: model, key: key, deadline: deadline)) }
+                    catch { return .failed(error) }
                 }
-            } catch Detour.nextModel(let reason) {
-                lastReason = reason
-            } catch Detour.streamed(let reason) {
-                lastReason = reason
+                group.addTask {
+                    try? await Task.sleep(for: hedge)
+                    return .slowStart
+                }
             }
+            launch()
+            while let outcome = try await group.next() {
+                switch outcome {
+                case .answer(let text):
+                    // The others are cancelled, which also cancels and deletes their jobs.
+                    group.cancelAll()
+                    return text
+                case .slowStart:
+                    // At most two at once: each job counts against the free tier's allowance.
+                    if Date() < deadline, running < 2 { launch() }
+                case .failed(let error):
+                    running -= 1
+                    failures.append(error)
+                    if running == 0 {
+                        if next < models.count, Date() < deadline { launch() } else { group.cancelAll() }
+                    }
+                }
+                if running == 0 && (next >= models.count || Date() >= deadline) { break }
+            }
+            group.cancelAll()
+            // The most useful reason to show: Google's own words first, else whatever came last.
+            for failure in failures { if case Failure.refused = failure { throw failure } }
+            if failures.contains(where: { if case Failure.busy = $0 { return true } else { return false } }) { throw Failure.busy }
+            throw failures.last ?? Failure.slow(Int(ask.seconds))
         }
-        throw Failure.refused(lastReason.isEmpty ? "Gemini didn't answer." : lastReason)
+    }
+
+    /// One model's try: a background job, else the streamed request.
+    private static func attempt(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> String {
+        do {
+            return try await background(ask, model: model, key: key, deadline: deadline)
+        } catch Detour.streamed(let reason) {
+            do {
+                return try await streamed(ask, model: model, key: key, deadline: deadline)
+            } catch Detour.nextModel(let why) {
+                throw Failure.refused(why.isEmpty ? reason : why)
+            }
+        } catch Detour.nextModel(let reason) {
+            throw Failure.refused(reason)
+        }
     }
 
     // MARK: Background job
@@ -99,11 +158,13 @@ enum GeminiJob {
     private static func background(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> String {
         // 1. Start the job. Settings a model may not know are dropped on its first complaint.
         var full = true
+        // The lightest thinking a model takes: recipes need knowledge, not long reasoning.
+        var level: String? = "minimal"
         var busy = 0
         var id = ""
         var first: [String: Any] = [:]
         while id.isEmpty {
-            let start = try request("/v1beta/interactions", method: "POST", key: key, json: jobBody(ask, model: model, full: full))
+            let start = try request("/v1beta/interactions", method: "POST", key: key, json: jobBody(ask, model: model, level: level, full: full))
             let (data, status) = try await send(start, deadline: deadline, seconds: Int(ask.seconds))
             let reason = message(data, status)
             switch status {
@@ -112,13 +173,16 @@ enum GeminiJob {
                       let name = json["id"] as? String, !name.isEmpty else { throw Detour.streamed("Gemini's job answer couldn't be read.") }
                 id = name
                 first = json
+            case 400 where level != nil && reason.localizedCaseInsensitiveContains("thinking"):
+                // "minimal" isn't taken by every model: the next level up is.
+                level = level == "minimal" ? "low" : nil
             case 400 where full:
                 full = false
             case 401, 403:
                 throw Failure.refused(reason)
             case 429, 500, 502, 503, 504:
                 busy += 1
-                guard busy < 3 else { throw Detour.nextModel(reason) }
+                guard busy < 3 else { throw Failure.busy }
                 try await Task.sleep(for: .seconds(2 * busy))
             case 404 where reason.localizedCaseInsensitiveContains("model"):
                 throw Detour.nextModel(reason)
@@ -148,9 +212,11 @@ enum GeminiJob {
                     ?? (json["error"] as? [String: Any])?["message"] as? String ?? ""
                 let reason = errors.isEmpty ? "Gemini stopped before answering (\(other))." : errors
                 // Over the allowance or overloaded part-way: another model may still answer.
-                if reason.localizedCaseInsensitiveContains("quota") || reason.localizedCaseInsensitiveContains("overloaded")
-                    || reason.localizedCaseInsensitiveContains("rate") || reason.localizedCaseInsensitiveContains("unavailable") {
-                    throw Detour.nextModel(reason)
+                let code = ((json["errors"] as? [[String: Any]])?.first?["code"] as? String ?? "").uppercased()
+                if ["RESOURCE_EXHAUSTED", "INTERNAL", "UNAVAILABLE", "DEADLINE_EXCEEDED"].contains(code)
+                    || reason.localizedCaseInsensitiveContains("quota") || reason.localizedCaseInsensitiveContains("overloaded")
+                    || reason.localizedCaseInsensitiveContains("high demand") {
+                    throw Failure.busy
                 }
                 throw Failure.refused(reason)
             }
@@ -174,13 +240,18 @@ enum GeminiJob {
         }
     }
 
-    private static func jobBody(_ ask: Ask, model: String, full: Bool) -> [String: Any] {
+    private static func jobBody(_ ask: Ask, model: String, level: String?, full: Bool) -> [String: Any] {
         var input: [[String: Any]] = []
         if let video = ask.video {
             var part: [String: Any] = ["type": "video", "uri": video.uri]
             if let mime = video.mime { part["mime_type"] = mime }
             // Small frames: plenty to read on-screen text, and quicker to watch.
-            if full { part["resolution"] = "low" }
+            if full {
+                part["resolution"] = "low"
+                // Two frames a second apart add little to a recipe video: half a frame a second
+                // reads the same words and is about a third fewer tokens to watch.
+                part["processing"] = ["type": "static", "fps": 0.5]
+            }
             input.append(part)
         }
         // The question goes after the video, as Google advises.
@@ -192,9 +263,8 @@ enum GeminiJob {
             var schema = ask.schema
             schema["propertyOrdering"] = nil
             format["schema"] = schema
-            // Writing out a recipe needs knowledge, not long reasoning: low thinking is far quicker.
-            body["generation_config"] = ["thinking_level": "low"]
         }
+        if let level { body["generation_config"] = ["thinking_level": level] }
         body["response_format"] = format
         return body
     }
@@ -281,7 +351,7 @@ enum GeminiJob {
             }
         }
         if !lastDrop.isEmpty { throw Failure.unreachable(lastDrop) }
-        throw Detour.nextModel(lastReason)
+        throw Failure.busy
     }
 
     // MARK: Plumbing
