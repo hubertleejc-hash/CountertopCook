@@ -67,7 +67,7 @@ struct ImportSheet: View {
                     go(.review(draft))
                 }
             case .review(let draft):
-                if draft.createdBy != nil, let lastRequest {
+                if draft.createdBy != nil || draft.aiNote != nil, let lastRequest {
                     RecipeEditorView(review: draft, onSaved: onSaved) { go(.create(lastRequest)) }
                 } else {
                     RecipeEditorView(review: draft, onSaved: onSaved)

@@ -61,6 +61,18 @@ enum LinkImport {
         }
     }
 
+    /// The recipe card (schema.org Recipe) published at `url`, exactly as the page gives it; nil
+    /// when the page can't be loaded or has no complete card. Used for pages Gemini found.
+    static func recipeCard(at url: URL) async -> RecipeDraft? {
+        guard !isSocial(url), YouTubePage.videoID(from: url) == nil, let fetched = try? await fetch(url) else { return nil }
+        let (html, page) = fetched
+        guard !isSocial(page), YouTubePage.videoID(from: page) == nil,
+              let imported = try? RecipeImporter.parse(html: html, url: page), complete(imported) else { return nil }
+        var draft = RecipeDraft(imported: imported, sourceURL: page.absoluteString, sourceName: imported.siteName)
+        draft.coverImage = await photo(at: imported.imageURL)
+        return draft
+    }
+
     // MARK: Captions (TikTok, Instagram, Facebook…)
 
     private static let socialHosts = ["tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",

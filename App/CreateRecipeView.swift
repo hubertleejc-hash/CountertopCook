@@ -9,6 +9,7 @@ struct CreateRecipeView: View {
     @State private var request: RecipeCreator.Request
     @State private var engines = RecipeCreator.engines
     @AppStorage("createEngine") private var chosen = RecipeCreator.Engine.gemini.rawValue
+    @AppStorage("createSearchOnline") private var searchOnline = true
     @State private var writing = false
     @State private var problem: String?
     /// What has been written so far, while it is written.
@@ -78,10 +79,22 @@ struct CreateRecipeView: View {
                             .pickerStyle(.segmented)
                             .accessibilityIdentifier("createEngine")
                         }
+                        if engine == .gemini {
+                            Toggle(isOn: $searchOnline) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Find a real recipe online")
+                                    Text(searchOnline ? "Gemini searches Google for a published recipe and copies it, with a link to the page."
+                                         : "Gemini writes a recipe from what it knows.")
+                                        .font(Theme.body(13, relativeTo: .footnote))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .accessibilityIdentifier("createSearchOnline")
+                        }
                         Button(action: create) {
                             HStack(spacing: 8) {
                                 if writing { ProgressView() }
-                                Text(writing ? (status ?? "Writing with \(engine?.rawValue ?? "AI")…") : "Create recipe")
+                                Text(writing ? (status ?? "Writing with \(engine?.rawValue ?? "AI")…") : (engine == .gemini && searchOnline ? "Find recipe" : "Create recipe"))
                                     .font(Theme.body(17, bold: true)).foregroundStyle(Theme.onAccent)
                                     .lineLimit(2)
                                     .minimumScaleFactor(0.8)
@@ -166,7 +179,9 @@ struct CreateRecipeView: View {
         Task {
             defer { writing = false; status = nil }
             do {
-                let draft = try await RecipeCreator.create(request, with: engine) { line in
+                var asked = request
+                asked.searchOnline = searchOnline
+                let draft = try await RecipeCreator.create(asked, with: engine) { line in
                     Task { @MainActor in if writing { status = line } }
                 }
                 onDraft(draft, request)

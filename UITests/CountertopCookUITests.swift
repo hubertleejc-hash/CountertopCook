@@ -298,6 +298,7 @@ final class CountertopCookUITests: XCTestCase {
         let idea = element("createIdea")
         XCTAssertTrue(idea.waitForExistence(timeout: 5), "Create with AI didn't open")
         XCTAssertFalse(element("createGo").isEnabled, "Create is possible with an empty request")
+        XCTAssertTrue(element("createSearchOnline").exists, "No way to find a real recipe online with Gemini")
         // The example chips fill the request (and avoid typing Chinese on the test keyboard).
         app.buttons["番茄炒蛋"].firstMatch.tap()
         snapshot("create-ai")

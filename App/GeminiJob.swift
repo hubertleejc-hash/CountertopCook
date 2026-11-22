@@ -24,6 +24,23 @@ enum GeminiJob {
         var schema: [String: Any]
         /// How long to wait for the answer in all.
         var seconds: TimeInterval
+        /// Let Gemini search Google first and answer from the pages it finds. The schema isn't
+        /// enforced then (Google doesn't take both together), so the prompt must ask for the JSON.
+        var search = false
+        /// The models to try, when not the usual ones (only some can search).
+        var models: [String]? = nil
+    }
+
+    /// A web page Gemini's answer came from.
+    struct Source: Equatable {
+        var url: String
+        var title: String
+    }
+
+    struct Reply {
+        var text: String
+        /// The pages a searched answer cites, in the order they were cited.
+        var sources: [Source] = []
     }
 
     enum Failure: LocalizedError {
@@ -51,6 +68,9 @@ enum GeminiJob {
     /// The models, fastest first. On Google's free tier the newest model is often overloaded
     /// (answers come back "high demand" or never), while the lite models answer in seconds and
     /// read a recipe just as well. The last is an alias that keeps working when a name is retired.
+    /// The models that can search Google, fastest first.
+    static let searchModels = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-lite-latest"]
+
     static let models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash",
                          "gemini-flash-lite-latest"]
 
@@ -75,7 +95,7 @@ enum GeminiJob {
     }()
 
     private enum Outcome {
-        case answer(String)
+        case answer(Reply)
         case failed(Error)
         case slowStart
     }
@@ -84,6 +104,12 @@ enum GeminiJob {
     /// Models are started one after another, and the next one is also started when the last
     /// is slow, so one overloaded model never holds the answer up.
     static func answer(_ ask: Ask, key: String, tick: @escaping @Sendable (Int) -> Void) async throws -> String {
+        try await reply(ask, key: key, tick: tick).text
+    }
+
+    /// Gemini's answer, with the pages it cites when it searched.
+    static func reply(_ ask: Ask, key: String, tick: @escaping @Sendable (Int) -> Void) async throws -> Reply {
+        let models = ask.models ?? self.models
         let started = Date()
         let deadline = started.addingTimeInterval(ask.seconds)
         let ticker = Task {
@@ -114,10 +140,10 @@ enum GeminiJob {
             launch()
             while let outcome = try await group.next() {
                 switch outcome {
-                case .answer(let text):
+                case .answer(let reply):
                     // The others are cancelled, which also cancels and deletes their jobs.
                     group.cancelAll()
-                    return text
+                    return reply
                 case .slowStart:
                     // At most two at once: each job counts against the free tier's allowance.
                     if Date() < deadline, running < 2 { launch() }
@@ -139,7 +165,7 @@ enum GeminiJob {
     }
 
     /// One model's try: a background job, else the streamed request.
-    private static func attempt(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> String {
+    private static func attempt(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> Reply {
         do {
             return try await background(ask, model: model, key: key, deadline: deadline)
         } catch Detour.streamed(let reason) {
@@ -155,7 +181,7 @@ enum GeminiJob {
 
     // MARK: Background job
 
-    private static func background(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> String {
+    private static func background(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> Reply {
         // 1. Start the job. Settings a model may not know are dropped on its first complaint.
         var full = true
         // The lightest thinking a model takes: recipes need knowledge, not long reasoning.
@@ -203,7 +229,7 @@ enum GeminiJob {
                 finished = true
                 let text = outputText(json)
                 guard !text.isEmpty else { throw Failure.unreadable }
-                return text
+                return Reply(text: text, sources: citations(json))
             case "in_progress", "queued", "pending":
                 break
             case let other:
@@ -259,6 +285,11 @@ enum GeminiJob {
         var format: [String: Any] = ["type": "text", "mime_type": "application/json"]
         var body: [String: Any] = ["model": model, "input": input, "background": true]
         if let system = ask.system { body["system_instruction"] = system }
+        if ask.search {
+            body["tools"] = [["type": "google_search"]]
+            if let level { body["generation_config"] = ["thinking_level": level] }
+            return body
+        }
         if full {
             var schema = ask.schema
             schema["propertyOrdering"] = nil
@@ -280,6 +311,20 @@ enum GeminiJob {
         return fromSteps.isEmpty ? texts(json["outputs"]) : fromSteps
     }
 
+    /// The pages a finished job's answer cites (its url_citation annotations), each once.
+    static func citations(_ json: [String: Any]) -> [Source] {
+        var found: [Source] = []
+        for step in json["steps"] as? [[String: Any]] ?? [] where step["type"] as? String == "model_output" {
+            for block in step["content"] as? [[String: Any]] ?? [] {
+                for note in block["annotations"] as? [[String: Any]] ?? [] where note["type"] as? String == "url_citation" {
+                    guard let url = note["url"] as? String, !url.isEmpty, !found.contains(where: { $0.url == url }) else { continue }
+                    found.append(Source(url: url, title: note["title"] as? String ?? ""))
+                }
+            }
+        }
+        return found
+    }
+
     /// Stops a job that is still running, and removes it either way.
     private static func tidy(_ id: String, key: String, cancel: Bool) {
         Task.detached {
@@ -294,7 +339,7 @@ enum GeminiJob {
 
     // MARK: Streamed request (the older way, kept as a fallback)
 
-    private static func streamed(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> String {
+    private static func streamed(_ ask: Ask, model: String, key: String, deadline: Date) async throws -> Reply {
         var parts: [[String: Any]] = []
         if let video = ask.video {
             var file: [String: Any] = ["file_uri": video.uri]
@@ -305,6 +350,7 @@ enum GeminiJob {
         var config: [String: Any] = ["responseMimeType": "application/json", "responseSchema": ask.schema,
                                      "thinkingConfig": ["thinkingLevel": "low"]]
         if ask.video != nil { config["mediaResolution"] = "MEDIA_RESOLUTION_LOW" }
+        if ask.search { config = ["thinkingConfig": ["thinkingLevel": "low"]] }
         var lastReason = ""
         var lastDrop = ""
         for attempt in 0..<3 {
@@ -312,6 +358,7 @@ enum GeminiJob {
             if attempt > 0 { try await Task.sleep(for: .seconds(2 * attempt)) }
             var body: [String: Any] = ["contents": [["role": "user", "parts": parts]], "generationConfig": config]
             if let system = ask.system { body["systemInstruction"] = ["parts": [["text": system]]] }
+            if ask.search { body["tools"] = [["google_search": [String: Any]()]] }
             var call = try request("/v1beta/models/\(model):streamGenerateContent?alt=sse", method: "POST", key: key, json: body, timeout: 120)
             call.setValue(nil, forHTTPHeaderField: "Api-Revision")
             do {
@@ -319,24 +366,32 @@ enum GeminiJob {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 if status == 200 {
                     var text = ""
+                    var sources: [Source] = []
                     for try await line in bytes.lines where line.hasPrefix("data:") {
                         let json = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any]
                         if let error = json?["error"] as? [String: Any] {
                             throw Failure.refused(error["message"] as? String ?? "Gemini stopped answering.")
                         }
-                        let content = (json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any]
+                        let candidate = (json?["candidates"] as? [[String: Any]])?.first
+                        let chunks = (candidate?["groundingMetadata"] as? [String: Any])?["groundingChunks"] as? [[String: Any]] ?? []
+                        for chunk in chunks {
+                            guard let web = chunk["web"] as? [String: Any], let url = web["uri"] as? String,
+                                  !sources.contains(where: { $0.url == url }) else { continue }
+                            sources.append(Source(url: url, title: web["title"] as? String ?? ""))
+                        }
+                        let content = candidate?["content"] as? [String: Any]
                         text += (content?["parts"] as? [[String: Any]] ?? [])
                             .filter { ($0["thought"] as? Bool) != true }
                             .compactMap { $0["text"] as? String }.joined()
                     }
                     guard !text.isEmpty else { throw Failure.unreadable }
-                    return text
+                    return Reply(text: text, sources: sources)
                 }
                 var data = Data()
                 for try await byte in bytes { data.append(byte) }
                 lastReason = message(data, status)
                 lastDrop = ""
-                if status == 400, config.count > 1,
+                if status == 400, config.count > 1, !ask.search,
                    lastReason.localizedCaseInsensitiveContains("thinking") || lastReason.localizedCaseInsensitiveContains("schema") {
                     config = ["responseMimeType": "application/json"]
                     continue

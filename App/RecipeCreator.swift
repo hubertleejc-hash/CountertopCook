@@ -28,6 +28,8 @@ enum RecipeCreator {
         var servings = 2
         /// Use only the ingredients listed, plus basic seasonings.
         var onlyListed = false
+        /// Gemini only: look for a real published recipe first, instead of writing one.
+        var searchOnline = true
     }
 
     enum Failure: LocalizedError {
@@ -92,6 +94,18 @@ enum RecipeCreator {
                                                   .init(amount: "", unit: "适量", name: "盐")],
                                     steps: ["鸡蛋打散，大火炒至凝固后盛出。", "番茄切块，中火炒2分钟出汁。", "倒回鸡蛋，加盐翻炒均匀即可。"],
                                     siteName: "", cuisine: "Chinese", category: "food")
+        } else if engine == .gemini, request.searchOnline, let key = OnlineVideoReader.savedKey {
+            do {
+                return try await findOnline(idea, request, key: key, progress)
+            } catch let failure as Failure {
+                if case .nothing = failure {} else { throw failure }
+            } catch {
+                // Search not possible right now: write one instead, and say so on review.
+            }
+            var draft = try await create(Request(idea: request.idea, servings: request.servings, onlyListed: request.onlyListed,
+                                                 searchOnline: false), with: engine, progress: progress)
+            draft.aiNote = "Gemini couldn't find a recipe online for this, so it wrote one from what it knows. Check the amounts, times and anything you're allergic to."
+            return draft
         } else {
             switch engine {
             case .gemini: answer = try await gemini(idea, request, progress)
@@ -141,6 +155,92 @@ enum RecipeCreator {
         } catch GeminiJob.Failure.refused(let reason) {
             throw Failure.refused("Gemini couldn't write this recipe: \(reason)")
         }
+    }
+
+    // MARK: Gemini, from a real recipe online
+
+    static func searchInstructions(_ request: Request) -> String {
+        """
+        Search the web for real, published recipes for what the cook asks for. Choose one well-liked recipe from \
+        a recipe site or a known cook; for a Chinese dish, prefer Chinese recipe sites such as 下厨房 (xiachufang.com) \
+        or 美食天下 (meishichina.com) and well-known Chinese cooks\(request.onlyListed ? ". It should use only the ingredients the cook lists, plus water, salt, pepper, sugar, oil and basic sauces" : ""). \
+        Copy that one recipe faithfully: its own ingredients, amounts, servings and steps. Never invent, change or \
+        mix in anything from other recipes. Keep the recipe's language if it is the request's language, else \
+        translate it into the request's language (a Chinese request gets Chinese). sourceURL is the address of the \
+        page you copied it from, and sourceName that site's or cook's name. Answer with JSON only, in this shape:
+        {"title": "", "sourceName": "", "sourceURL": "", "servings": 0, "ingredients": [{"amount": "", "unit": "", "name": ""}], \
+        "steps": [""], "totalMinutes": 0, "category": "food, drinks or desserts", "cuisine": "one English word"}
+        If you find no real recipe for it, answer with empty lists.
+        """
+    }
+
+    /// Finds a published recipe with Gemini's Google Search. When the page it cites carries a
+    /// recipe card, that card is imported as it stands (nothing rewritten); otherwise Gemini's
+    /// copy of the page is used, with the page as its source.
+    private static func findOnline(_ idea: String, _ request: Request, key: String, _ progress: @escaping Progress) async throws -> RecipeDraft {
+        let ask = GeminiJob.Ask(prompt: idea, system: searchInstructions(request), video: nil, schema: schema, seconds: 75,
+                                search: true, models: GeminiJob.searchModels)
+        let reply: GeminiJob.Reply
+        do {
+            reply = try await GeminiJob.reply(ask, key: key) { seconds in
+                progress("Searching recipes online…" + (seconds >= 3 ? " · \(seconds)s" : ""))
+            }
+        } catch GeminiJob.Failure.refused(let reason) where reason.localizedCaseInsensitiveContains("key") {
+            throw Failure.refused("Gemini didn't accept the key: \(reason)")
+        }
+        let object = (try? JSONSerialization.jsonObject(with: Data(jsonBody(reply.text).utf8))) as? [String: Any] ?? [:]
+        let claimedURL = (object["sourceURL"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        let claimedName = (object["sourceName"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        // Only pages Google's search actually returned count; an address the model wrote is
+        // trusted only when its site is one of them.
+        let citedHosts = Set(reply.sources.flatMap { [host($0.url), $0.title.lowercased()] }.filter { !$0.isEmpty })
+        var candidates: [URL] = []
+        if let url = URL(string: claimedURL), let h = url.host?.lowercased(),
+           citedHosts.contains(where: { h == $0 || h.hasSuffix("." + $0) || $0.hasSuffix("." + h) }) {
+            candidates.append(url)
+        }
+        candidates += reply.sources.compactMap { URL(string: $0.url) }
+        candidates = Array(candidates.prefix(3))
+
+        // 1. A recipe card on one of the pages: the page's own recipe, word for word.
+        if !candidates.isEmpty {
+            progress("Opening the recipe it found…")
+            let cards = await withTaskGroup(of: (Int, RecipeDraft?).self, returning: [Int: RecipeDraft].self) { group in
+                for (index, url) in candidates.enumerated() {
+                    group.addTask { (index, await LinkImport.recipeCard(at: url)) }
+                }
+                var found: [Int: RecipeDraft] = [:]
+                for await (index, draft) in group { if let draft { found[index] = draft } }
+                return found
+            }
+            if let best = cards.keys.sorted().first, var draft = cards[best] {
+                let site = draft.sourceName?.isEmpty == false ? draft.sourceName! : host(draft.sourceURL ?? "")
+                draft.aiNote = "Gemini found this recipe on \(site). Hearth copied it from the page's own recipe card, so the amounts and steps are the page's, unchanged."
+                return draft
+            }
+        }
+
+        // 2. Gemini's copy of the page it read.
+        guard !reply.sources.isEmpty, var recipe = try? OnlineVideoReader.parse(reply.text),
+              !recipe.ingredients.isEmpty, !recipe.steps.isEmpty else { throw Failure.nothing }
+        if recipe.title.isEmpty { recipe.title = String(idea.prefix(40)) }
+        let sourceURL = candidates.first?.absoluteString ?? reply.sources[0].url
+        let site = !claimedName.isEmpty ? claimedName : (reply.sources[0].title.isEmpty ? host(sourceURL) : reply.sources[0].title)
+        var draft = RecipeDraft(imported: recipe, sourceURL: sourceURL, sourceName: site)
+        draft.createdBy = "Gemini"
+        draft.notInSource.removeAll { $0 == "ingredients" || $0 == "steps" }
+        draft.aiNote = "Gemini read this recipe on \(site) and wrote it out here, translating it if needed. Check it against the original page before saving: Gemini can misread an amount."
+        return draft
+    }
+
+    private static func host(_ address: String) -> String {
+        (URL(string: address)?.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "")
+    }
+
+    /// The JSON object in an answer that may wrap it in prose or a code fence.
+    private static func jsonBody(_ text: String) -> String {
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end else { return "{}" }
+        return String(text[start...end])
     }
 
     // MARK: Apple Intelligence

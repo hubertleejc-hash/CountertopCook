@@ -44,7 +44,9 @@ Local only: no account, no server. Apple Intelligence, on the phone, writes out 
   - **+ → Create with AI.** A new recipe written from a dish's name, an idea, or the ingredients
     the cook has (optionally using only those), in the language asked (Chinese stays Chinese),
     for the chosen number of servings. Written by Gemini when a key is saved, else by Apple
-    Intelligence on the phone; the cook can pick when both are there. Unlike an import, this is
+    Intelligence on the phone; the cook can pick when both are there. With Gemini, **Find a real recipe online** (on by default) has Gemini
+    search Google first: a cited page with a recipe card is imported as it stands, else Gemini's
+    copy of the page is shown with a link to it. Unlike an import, a written recipe is
     invented, so the review screen says so and offers "Write a different one" before saving.
     `COOK_FAKE_AI=1` gives a canned answer for UI tests. Code in `App/RecipeCreator.swift`.
   - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…) or a screen
