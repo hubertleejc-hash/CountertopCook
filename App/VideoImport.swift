@@ -21,6 +21,8 @@ struct VideoImportView: View {
     @State private var awaitingConsent: Source?
     /// The newest video in Photos, once Hearth is allowed to look.
     @State private var newest: NewestVideo.Info?
+    /// Delete the video from Photos once its recipe is read (iOS asks to confirm, and keeps it 30 days in Recently Deleted).
+    @AppStorage("deleteSavedVideoAfterReading") private var deleteAfter = false
 
     /// Where the video to read comes from.
     private enum Source {
@@ -55,6 +57,9 @@ struct VideoImportView: View {
                     }
                     .disabled(reading)
                     .accessibilityIdentifier("videoImportNewest")
+                    Toggle("Delete it from Photos after reading", isOn: $deleteAfter)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("videoImportDelete")
                     if reading {
                         HStack(spacing: 8) {
                             ProgressView()
@@ -168,6 +173,13 @@ struct VideoImportView: View {
                 return
             }
             let movie = PickedMovie(url: file)
+            // Only a video whose recipe was read is deleted from Photos, and only when the cook asked.
+            let finish: (RecipeDraft) async -> Void = { draft in
+                if case .newest(let asset) = source, deleteAfter, draft.emptyReason == nil {
+                    await NewestVideo.delete(asset)
+                }
+                onDraft(draft)
+            }
             defer { try? FileManager.default.removeItem(at: movie.url) }
             let report: LinkImport.Progress = { line in Task { @MainActor in status = line } }
             var onlineProblem: String?
@@ -177,7 +189,7 @@ struct VideoImportView: View {
                         var draft = RecipeDraft(imported: watched, sourceURL: nil, sourceName: "Video")
                         draft.readBy = "Gemini (Google), from the video"
                         draft.coverImage = await VideoText.cover(of: movie.url)
-                        onDraft(draft)
+                        await finish(draft)
                         return
                     }
                     onlineProblem = "Gemini found no recipe in this video."
@@ -193,7 +205,7 @@ struct VideoImportView: View {
                 draft.emptyReason = [onlineProblem, "Hearth couldn't find any words in this video: nothing on screen, and no speech it could make out."]
                     .compactMap { $0 }.joined(separator: " ")
                 draft.coverImage = content.cover
-                onDraft(draft)
+                await finish(draft)
                 return
             }
             let text = [content.onScreen.isEmpty ? "" : "Text shown in the video:\n" + content.onScreen,
@@ -203,7 +215,7 @@ struct VideoImportView: View {
             if draft.readBy != nil { draft.readBy = "Apple Intelligence, from what the video shows and says" }
             if let onlineProblem, let reason = draft.emptyReason { draft.emptyReason = onlineProblem + " " + reason }
             draft.coverImage = content.cover
-            onDraft(draft)
+            await finish(draft)
         }
     }
 }
@@ -241,6 +253,13 @@ enum NewestVideo {
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         options.fetchLimit = 1
         return PHAsset.fetchAssets(with: .video, options: options).firstObject.map(Info.init)
+    }
+
+    /// Deletes the video from Photos; iOS asks the cook to confirm.
+    static func delete(_ asset: PHAsset) async {
+        try? await PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.deleteAssets([asset] as NSArray)
+        }
     }
 
     /// A temporary copy of the video's file, fetched from iCloud if it isn't on the phone; nil when it can't be had.
