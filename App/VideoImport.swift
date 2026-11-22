@@ -1,4 +1,5 @@
 import SwiftUI
+import Photos
 import PhotosUI
 import AVFoundation
 import CoreTransferable
@@ -17,7 +18,15 @@ struct VideoImportView: View {
     @State private var status: String?
     @State private var readError: String?
     /// A video waiting for the cook's answer to the Gemini notice.
-    @State private var awaitingConsent: PhotosPickerItem?
+    @State private var awaitingConsent: Source?
+    /// The newest video in Photos, once Hearth is allowed to look.
+    @State private var newest: NewestVideo.Info?
+
+    /// Where the video to read comes from.
+    private enum Source {
+        case picked(PhotosPickerItem)
+        case newest(PHAsset)
+    }
     @State private var hasKey = OnlineVideoReader.hasKey
 
     var body: some View {
@@ -30,6 +39,22 @@ struct VideoImportView: View {
                     }
                     .disabled(reading)
                     .accessibilityIdentifier("videoImportPick")
+                    // Right after Save video in TikTok, Instagram or Xiaohongshu, the video is the newest one.
+                    Button {
+                        Task { await readNewest() }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Read my newest saved video", systemImage: "clock.arrow.circlepath")
+                            if let newest {
+                                Text(newest.summary)
+                                    .font(Theme.body(13, relativeTo: .footnote))
+                                    .foregroundStyle(Theme.ink.opacity(0.7))
+                            }
+                        }
+                        .frame(minHeight: 44, alignment: .leading)
+                    }
+                    .disabled(reading)
+                    .accessibilityIdentifier("videoImportNewest")
                     if reading {
                         HStack(spacing: 8) {
                             ProgressView()
@@ -75,24 +100,23 @@ struct VideoImportView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            .onAppear { hasKey = OnlineVideoReader.hasKey }
+            .onAppear {
+                hasKey = OnlineVideoReader.hasKey
+                if NewestVideo.allowed { newest = NewestVideo.find() }
+            }
             .onChange(of: picked) { _, item in
                 guard let item else { return }
-                if OnlineVideoReader.hasKey && !OnlineVideoReader.uploadAgreed {
-                    awaitingConsent = item
-                } else {
-                    read(item, online: OnlineVideoReader.hasKey)
-                }
+                start(.picked(item))
             }
             .alert("Send this video to Gemini?", isPresented: Binding(
                 get: { awaitingConsent != nil }, set: { if !$0 { awaitingConsent = nil } })) {
                 Button("Send to Gemini") {
                     OnlineVideoReader.uploadAgreed = true
-                    if let item = awaitingConsent { read(item, online: true) }
+                    if let source = awaitingConsent { read(source, online: true) }
                     awaitingConsent = nil
                 }
                 Button("Read on this iPhone") {
-                    if let item = awaitingConsent { read(item, online: false) }
+                    if let source = awaitingConsent { read(source, online: false) }
                     awaitingConsent = nil
                 }
                 Button("Cancel", role: .cancel) { awaitingConsent = nil; picked = nil }
@@ -102,17 +126,48 @@ struct VideoImportView: View {
         }
     }
 
-    private func read(_ item: PhotosPickerItem, online: Bool) {
+    /// Asks first, once, before a video goes to Gemini.
+    private func start(_ source: Source) {
+        if OnlineVideoReader.hasKey && !OnlineVideoReader.uploadAgreed {
+            awaitingConsent = source
+        } else {
+            read(source, online: OnlineVideoReader.hasKey)
+        }
+    }
+
+    /// The video just saved from another app: the newest in Photos.
+    private func readNewest() async {
+        guard !reading else { return }
+        readError = nil
+        guard await NewestVideo.ensureAccess() else {
+            readError = "Hearth needs to see your Photos to find the video you just saved. Allow it in Settings → Hearth → Photos, or choose the video below."
+            return
+        }
+        guard let found = NewestVideo.find() else {
+            readError = "Hearth can't see a video in Photos yet. Save one from the app first, or choose one below."
+            return
+        }
+        newest = found
+        start(.newest(found.asset))
+    }
+
+    private func read(_ source: Source, online: Bool) {
         guard !reading else { return }
         reading = true
         readError = nil
         status = "Opening the video…"
         Task {
             defer { reading = false; picked = nil }
-            guard let movie = try? await item.loadTransferable(type: PickedMovie.self) else {
+            let file: URL?
+            switch source {
+            case .picked(let item): file = (try? await item.loadTransferable(type: PickedMovie.self))?.url
+            case .newest(let asset): file = await NewestVideo.file(for: asset)
+            }
+            guard let file else {
                 readError = "Couldn't open that video. Try another one."
                 return
             }
+            let movie = PickedMovie(url: file)
             defer { try? FileManager.default.removeItem(at: movie.url) }
             let report: LinkImport.Progress = { line in Task { @MainActor in status = line } }
             var onlineProblem: String?
@@ -149,6 +204,60 @@ struct VideoImportView: View {
             if let onlineProblem, let reason = draft.emptyReason { draft.emptyReason = onlineProblem + " " + reason }
             draft.coverImage = content.cover
             onDraft(draft)
+        }
+    }
+}
+
+/// The newest video in Photos, so a video saved a moment ago from TikTok, Instagram, Xiaohongshu
+/// or Douyin is one tap away. Needs the cook's permission to see Photos, asked when they tap.
+enum NewestVideo {
+    struct Info {
+        let asset: PHAsset
+
+        /// "Saved 2 minutes ago · 0:42"
+        var summary: String {
+            let seconds = Int(asset.duration.rounded())
+            let length = String(format: "%d:%02d", seconds / 60, seconds % 60)
+            guard let date = asset.creationDate else { return length }
+            let when = RelativeDateTimeFormatter()
+            when.unitsStyle = .full
+            return "Saved " + when.localizedString(for: date, relativeTo: Date()) + " · " + length
+        }
+    }
+
+    static var allowed: Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        return status == .authorized || status == .limited
+    }
+
+    static func ensureAccess() async -> Bool {
+        if allowed { return true }
+        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        return status == .authorized || status == .limited
+    }
+
+    static func find() -> Info? {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 1
+        return PHAsset.fetchAssets(with: .video, options: options).firstObject.map(Info.init)
+    }
+
+    /// A temporary copy of the video's file, fetched from iCloud if it isn't on the phone; nil when it can't be had.
+    static func file(for asset: PHAsset) async -> URL? {
+        let resources = PHAssetResource.assetResources(for: asset)
+        guard let resource = resources.first(where: { $0.type == .video })
+                ?? resources.first(where: { $0.type == .fullSizeVideo }) else { return nil }
+        let ext = URL(fileURLWithPath: resource.originalFilename).pathExtension
+        let copy = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(ext.isEmpty ? "mov" : ext)
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        return await withCheckedContinuation { continuation in
+            PHAssetResourceManager.default().writeData(for: resource, toFile: copy, options: options) { error in
+                continuation.resume(returning: error == nil ? copy : nil)
+            }
         }
     }
 }

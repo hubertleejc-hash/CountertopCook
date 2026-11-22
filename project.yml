@@ -33,6 +33,8 @@ targets:
         # Scan a recipe page (VisionKit's document camera).
         INFOPLIST_KEY_NSCameraUsageDescription: Hearth uses the camera to scan a recipe page and read its text.
         # Listening to a cooking video saved to Photos (or a screen recording of one) on the phone.
+        # "Read my newest saved video": the video just saved from TikTok, Instagram or Xiaohongshu.
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Hearth looks for the newest video in Photos, so a cooking video you just saved can be turned into a recipe.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Hearth listens to a cooking video to write out the recipe it says. This happens on your iPhone where the language allows.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
