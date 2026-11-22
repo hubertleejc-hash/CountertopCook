@@ -31,6 +31,8 @@ struct RecipeListView: View {
         case photos(scan: Bool)
         /// Import a video saved to Photos.
         case video
+        /// Create a new recipe with AI.
+        case create
 
         var id: String {
             switch self {
@@ -38,6 +40,7 @@ struct RecipeListView: View {
             case .link(let link, _): return "link-\(link)"
             case .paste: return "paste"
             case .photos: return "photos"
+            case .create: return "create"
             case .video: return "video"
             }
         }
@@ -120,6 +123,8 @@ struct RecipeListView: View {
                     ImportSheet(start: .photos(scan: scan)) { open($0) }
                 case .video:
                     ImportSheet(start: .video) { open($0) }
+                case .create:
+                    ImportSheet(start: .create(.init())) { open($0) }
                 }
             }
         }
@@ -178,6 +183,12 @@ struct RecipeListView: View {
 
     private var addMenu: some View {
         Menu {
+            Button {
+                sheet = .create
+            } label: {
+                Label("Create with AI", systemImage: "sparkles")
+            }
+            .accessibilityIdentifier("menuCreateAI")
             Button {
                 sheet = .link("", start: false)
             } label: {

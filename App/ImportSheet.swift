@@ -10,6 +10,8 @@ struct ImportSheet: View {
         case photos(scan: Bool)
         case video
         case onlineKey(String)
+        /// Create with AI: a new recipe written from the cook's request.
+        case create(RecipeCreator.Request)
         case help(RecipeDraft, from: Origin)
         case review(RecipeDraft)
     }
@@ -20,6 +22,8 @@ struct ImportSheet: View {
     @State private var stage: Stage
     /// Changes with every stage, so each screen starts fresh.
     @State private var step = 0
+    /// The last Create with AI request, so the review screen can go back and write another.
+    @State private var lastRequest: RecipeCreator.Request?
 
     init(start: Stage, onSaved: @escaping (Recipe) -> Void) {
         self.onSaved = onSaved
@@ -57,8 +61,17 @@ struct ImportSheet: View {
                     case .retry: go(.link(draft.sourceURL ?? "", start: false))
                     }
                 }
+            case .create(let request):
+                CreateRecipeView(request: request) { draft, request in
+                    lastRequest = request
+                    go(.review(draft))
+                }
             case .review(let draft):
-                RecipeEditorView(review: draft, onSaved: onSaved)
+                if draft.createdBy != nil || draft.aiNote != nil, let lastRequest {
+                    RecipeEditorView(review: draft, onSaved: onSaved) { go(.create(lastRequest)) }
+                } else {
+                    RecipeEditorView(review: draft, onSaved: onSaved)
+                }
             }
         }
         .id(step)

@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Security
 import CookCore
@@ -12,16 +13,12 @@ enum OnlineVideoReader {
         case noKey
         case refused(String)
         case unreadable
-        case connection
-        case slow
 
         var errorDescription: String? {
             switch self {
             case .noKey: return "Add a Gemini API key to read videos online."
             case .refused(let reason): return "Gemini couldn't read this video: \(reason)"
             case .unreadable: return "Gemini's answer couldn't be read."
-            case .slow: return "Gemini took too long to watch this video. Try again in a minute, or on Wi-Fi."
-            case .connection: return "The connection to Gemini kept dropping while it watched the video. Try again on Wi-Fi, or with a stronger signal."
             }
         }
     }
@@ -29,7 +26,7 @@ enum OnlineVideoReader {
     /// Where to get a key, for the settings screen.
     static let keyPage = URL(string: "https://aistudio.google.com/apikey")!
     /// The models tried, in order: when Google retires one, the next still answers.
-    static let models = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.6-flash"]
+    static var models: [String] { GeminiJob.models }
 
     /// Checks a key before it is saved: nil when Gemini accepts it, else what's wrong.
     static func problem(withKey key: String) async -> String? {
@@ -69,23 +66,43 @@ enum OnlineVideoReader {
     amount, time or step it doesn't give, and leave an amount or unit empty when it isn't stated. \
     Keep the video's own language (Chinese stays Chinese). Each step is one short instruction, \
     keeping any time or temperature stated. Answer with JSON only, in this shape:
-    {"title": "", "servings": 0, "ingredients": [{"amount": "", "unit": "", "name": ""}], "steps": [""]}
-    servings is 0 when the video doesn't say. If the video has no recipe, answer with empty lists.
+    {"title": "", "servings": 0, "totalMinutes": 0, "ingredients": [{"amount": "", "unit": "", "name": ""}], "steps": [""]}
+    servings is how many people it feeds, 0 when the video doesn't say or show it. totalMinutes is the \
+    time needed in all: the video's own figure, else the times its steps state added up, else 0. \
+    If the video has no recipe, answer with empty lists.
     """
 
-    private static let api = "https://generativelanguage.googleapis.com"
+    static let api = "https://generativelanguage.googleapis.com"
+
+    /// The saved key, for the other Gemini features (Create with AI).
+    static var savedKey: String? { Keychain.read().flatMap { $0.isEmpty ? nil : $0 } }
 
     /// The recipe in the YouTube video at `url`; nil when the video has none.
     static func recipe(youTube url: URL, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
-        try await generate(video: ["file_uri": url.absoluteString], progress: progress)
+        try await generate(video: .init(uri: url.absoluteString, mime: nil), progress: progress)
     }
 
     /// The recipe in a video file on the phone (one saved from Xiaohongshu, Douyin or another
     /// app, or a screen recording): uploaded to Gemini's file store, read, then deleted there.
     static func recipe(videoFile file: URL, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
-        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue ?? 0
-        guard size > 0 else { throw Failure.refused("the video file is empty.") }
+        func bytes(_ url: URL) -> Int {
+            (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
+        }
+        guard bytes(file) > 0 else { throw Failure.refused("the video file is empty.") }
+        // A phone video or screen recording is far bigger than Gemini needs (it looks at small
+        // frames): a smaller copy uploads many times quicker, most of all on mobile data.
+        var file = file
+        var smaller: URL?
+        if bytes(file) > 15_000_000 {
+            progress("Making the video smaller to send…")
+            if let copy = await slimmed(file), bytes(copy) > 0, bytes(copy) < bytes(file) {
+                file = copy
+                smaller = copy
+            }
+        }
+        defer { if let smaller { try? FileManager.default.removeItem(at: smaller) } }
+        let size = bytes(file)
         let mime = file.pathExtension.lowercased() == "mp4" || file.pathExtension.lowercased() == "m4v" ? "video/mp4" : "video/mov"
 
         // 1. Start a resumable upload.
@@ -137,10 +154,25 @@ enum OnlineVideoReader {
             state = (try? JSONSerialization.jsonObject(with: pollData) as? [String: Any])?["state"] as? String ?? "FAILED"
         }
         guard state == "ACTIVE" else { throw Failure.refused("Google couldn't open this video.") }
-        return try await generate(video: ["file_uri": uri, "mime_type": mime], progress: progress)
+        return try await generate(video: .init(uri: uri, mime: mime), progress: progress)
     }
 
-    /// A session that waits out long answers: watching a video can take minutes.
+    /// A smaller copy of a video (about 480p), or nil when it can't be made.
+    private static func slimmed(_ file: URL) async -> URL? {
+        guard let export = AVAssetExportSession(asset: AVURLAsset(url: file), presetName: AVAssetExportPresetMediumQuality) else { return nil }
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        export.outputURL = copy
+        export.outputFileType = .mp4
+        export.shouldOptimizeForNetworkUse = true
+        await export.export()
+        guard export.status == .completed else {
+            try? FileManager.default.removeItem(at: copy)
+            return nil
+        }
+        return copy
+    }
+
+    /// A session that waits out a long upload.
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 300
@@ -149,86 +181,42 @@ enum OnlineVideoReader {
         return URLSession(configuration: configuration)
     }()
 
-    private static func generate(video: [String: String], progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
+    /// The answer's shape, enforced by Gemini.
+    private static let schema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "title": ["type": "string"],
+            "servings": ["type": "integer"],
+            "totalMinutes": ["type": "integer"],
+            "ingredients": ["type": "array", "items": [
+                "type": "object",
+                "properties": ["amount": ["type": "string"], "unit": ["type": "string"], "name": ["type": "string"]],
+                "required": ["amount", "unit", "name"],
+            ]],
+            "steps": ["type": "array", "items": ["type": "string"]],
+        ],
+        "required": ["title", "servings", "totalMinutes", "ingredients", "steps"],
+        "propertyOrdering": ["title", "servings", "totalMinutes", "ingredients", "steps"],
+    ]
+
+    private static func generate(video: GeminiJob.Video, progress: @escaping @Sendable (String) -> Void) async throws -> ImportedRecipe? {
         guard let key = Keychain.read(), !key.isEmpty else { throw Failure.noKey }
-        var body: [String: Any] = [
-            "contents": [["parts": [["text": prompt], ["file_data": video]]]],
-            // Low resolution frames: plenty to read on-screen text, and much quicker to watch.
-            "generationConfig": ["responseMimeType": "application/json", "temperature": 0.1,
-                                 "mediaResolution": "MEDIA_RESOLUTION_LOW",
-                                 // Writing out a recipe needs little reasoning; long thinking
-                                 // was most of the wait.
-                                 "thinkingConfig": ["thinkingLevel": "low"]],
-        ]
-        // Give up after four minutes in all, rather than retrying for a quarter of an hour.
-        let deadline = Date().addingTimeInterval(240)
-        // Shows the time spent, so a long wait doesn't look stuck.
-        let started = Date()
-        let ticker = Task {
-            while !Task.isCancelled {
-                let seconds = Int(Date().timeIntervalSince(started))
-                progress(seconds < 5 ? "Gemini is watching the video…"
+        // Five minutes in all; most videos are read in well under one.
+        let ask = GeminiJob.Ask(prompt: prompt, system: nil, video: video, schema: schema, seconds: 300)
+        do {
+            let text = try await GeminiJob.answer(ask, key: key) { seconds in
+                // Shows the time spent, so the wait doesn't look stuck.
+                progress(seconds < 3 ? "Gemini is watching the video…"
                          : String(format: "Gemini is watching the video… %d:%02d", seconds / 60, seconds % 60))
-                try? await Task.sleep(for: .seconds(1))
             }
+            return try parse(text)
+        } catch GeminiJob.Failure.refused(let reason) {
+            throw Failure.refused(reason)
         }
-        defer { ticker.cancel() }
-        var lastError: Error = Failure.unreadable
-        for model in models {
-            // A dropped connection or a busy answer is tried again, up to three times in all.
-            for attempt in 0..<3 {
-                guard Date() < deadline else { throw Failure.slow }
-                if attempt > 0 { try await Task.sleep(for: .seconds(3 * attempt)) }
-                // Streamed, so bytes keep flowing while Gemini watches: a silent connection
-                // held for minutes is what mobile networks drop ("connection was lost").
-                var request = URLRequest(url: URL(string: "\(api)/v1beta/models/\(model):streamGenerateContent?alt=sse")!)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                do {
-                    let (bytes, response) = try await session.bytes(for: request)
-                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    if status == 200 {
-                        var text = ""
-                        for try await line in bytes.lines where line.hasPrefix("data:") {
-                            let chunk = Data(line.dropFirst(5).utf8)
-                            let json = try? JSONSerialization.jsonObject(with: chunk) as? [String: Any]
-                            if let error = json?["error"] as? [String: Any] {
-                                throw Failure.refused(error["message"] as? String ?? "Gemini stopped answering.")
-                            }
-                            text += ((json?["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"]
-                                .flatMap { $0 as? [[String: Any]] }?.compactMap { $0["text"] as? String }.joined() ?? ""
-                        }
-                        return try parse(text)
-                    }
-                    var data = Data()
-                    for try await byte in bytes { data.append(byte) }
-                    do { try check(response, data) } catch { lastError = error }
-                    // A model that doesn't take a thinking level is asked again without one.
-                    if status == 400, case Failure.refused(let message) = lastError, message.lowercased().contains("thinking"),
-                       var config = body["generationConfig"] as? [String: Any], config["thinkingConfig"] != nil {
-                        config["thinkingConfig"] = nil
-                        body["generationConfig"] = config
-                        continue
-                    }
-                    if [429, 500, 503, 504].contains(status) { continue }
-                    break
-                } catch let error as URLError where error.code != .cancelled {
-                    lastError = Failure.connection
-                    continue
-                }
-            }
-            // Only a model Google no longer offers moves on to the next one.
-            guard case Failure.refused(let message) = lastError,
-                  message.contains("not found") || message.contains("is not supported") || message.contains("HTTP 404")
-            else { throw lastError }
-        }
-        throw lastError
     }
 
     /// Throws Google's own message for a failed request.
-    private static func check(_ response: URLResponse, _ data: Data) throws {
+    static func check(_ response: URLResponse, _ data: Data) throws {
         guard let status = (response as? HTTPURLResponse)?.statusCode, status != 200 else { return }
         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? "HTTP \(status)"
@@ -262,9 +250,18 @@ enum OnlineVideoReader {
         }
         let steps = (object["steps"] as? [Any] ?? []).map(string).filter { !$0.isEmpty }
         guard !ingredients.isEmpty || !steps.isEmpty else { return nil }
-        let servings = (object["servings"] as? NSNumber)?.intValue ?? Int(string(object["servings"])) ?? 0
-        return ImportedRecipe(title: string(object["title"]), servings: servings > 0 ? servings : nil, totalMinutes: nil,
-                              ingredients: ingredients, steps: steps, siteName: "", cuisine: nil)
+        func number(_ value: Any?) -> Int? {
+            let n = (value as? NSNumber)?.intValue ?? Int(string(value)) ?? 0
+            return n > 0 ? n : nil
+        }
+        func optionalText(_ value: Any?) -> String? {
+            let t = string(value)
+            return t.isEmpty ? nil : t
+        }
+        // totalMinutes, cuisine and category come only from Create with AI; a video's answer has none.
+        return ImportedRecipe(title: string(object["title"]), servings: number(object["servings"]),
+                              totalMinutes: number(object["totalMinutes"]), ingredients: ingredients, steps: steps,
+                              siteName: "", cuisine: optionalText(object["cuisine"]), category: optionalText(object["category"]))
     }
 }
 

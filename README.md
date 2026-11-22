@@ -1,7 +1,7 @@
 # Hearth
 
 A small, personal iOS cooking app (formerly Countertop Cook; the bundle ID is unchanged).
-Local only: no account, no server. Apple Intelligence, on the phone, only to write out recipes that are spoken or hard to read. All text is English.
+Local only: no account, no server. Apple Intelligence, on the phone, writes out recipes that are spoken or hard to read, and Create with AI writes new ones. All text is English.
 
 ## What it does
 
@@ -41,6 +41,14 @@ Local only: no account, no server. Apple Intelligence, on the phone, only to wri
     button and Import a saved video. With a key, Import a saved video uploads the file to
     Gemini (after a one-time notice that the free tier may use it to improve Google's products),
     deletes it there once read, and falls back to reading on the phone if Gemini can't. The model is set in `App/OnlineVideoReader.swift`.
+  - **+ → Create with AI.** A new recipe written from a dish's name, an idea, or the ingredients
+    the cook has (optionally using only those), in the language asked (Chinese stays Chinese),
+    for the chosen number of servings. Written by Gemini when a key is saved, else by Apple
+    Intelligence on the phone; the cook can pick when both are there. With Gemini, **Find a real recipe online** (on by default) has Gemini
+    search Google first: a cited page with a recipe card is imported as it stands, else Gemini's
+    copy of the page is shown with a link to it. Unlike an import, a written recipe is
+    invented, so the review screen says so and offers "Write a different one" before saving.
+    `COOK_FAKE_AI=1` gives a canned answer for UI tests. Code in `App/RecipeCreator.swift`.
   - **+ → Import a saved video.** A video in Photos (Xiaohongshu, Douyin, TikTok…) or a screen
     recording of one playing: the words it shows on screen and what it says (speech recognition
     on the phone).

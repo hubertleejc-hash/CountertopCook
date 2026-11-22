@@ -8,6 +8,8 @@ struct RecipeEditorView: View {
     /// True when this is the review of an import.
     private let reviewing: Bool
     private let onSaved: ((Recipe) -> Void)?
+    /// Create with AI only: back to the request, to have a different recipe written.
+    private let onRedo: (() -> Void)?
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var draft: RecipeDraft
@@ -16,14 +18,16 @@ struct RecipeEditorView: View {
         self.recipe = recipe
         reviewing = false
         onSaved = nil
+        onRedo = nil
         _draft = State(initialValue: recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft())
     }
 
     /// Review an import: `draft` holds only what the source gave. Nothing is saved until Save.
-    init(review draft: RecipeDraft, onSaved: @escaping (Recipe) -> Void) {
+    init(review draft: RecipeDraft, onSaved: @escaping (Recipe) -> Void, onRedo: (() -> Void)? = nil) {
         recipe = nil
         reviewing = true
         self.onSaved = onSaved
+        self.onRedo = onRedo
         _draft = State(initialValue: draft)
     }
 
@@ -33,10 +37,22 @@ struct RecipeEditorView: View {
                 if reviewing {
                     Section {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label("Check this against the original before saving.", systemImage: "checkmark.seal")
+                            Label(draft.createdBy == nil || draft.sourceURL != nil ? "Check this against the original before saving."
+                                  : "Check this recipe before saving.",
+                                  systemImage: draft.createdBy == nil && draft.aiNote == nil ? "checkmark.seal" : "sparkles")
                                 .font(Theme.body(17, bold: true))
                                 .foregroundStyle(Theme.navy)
-                            if let readBy = draft.readBy {
+                            if let note = draft.aiNote {
+                                Text(note)
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("reviewCreatedBy")
+                            } else if let createdBy = draft.createdBy {
+                                Text("Created by \(createdBy) from your request, not taken from a tested recipe. Check the amounts, times and anything you're allergic to, and change whatever you like.")
+                                    .font(Theme.body(15, relativeTo: .subheadline))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("reviewCreatedBy")
+                            } else if let readBy = draft.readBy {
                                 Text("Written out by \(readBy). Check every amount and step against the original: it can mishear or misread.")
                                     .font(Theme.body(15, relativeTo: .subheadline))
                                     .foregroundStyle(.secondary)
@@ -45,6 +61,23 @@ struct RecipeEditorView: View {
                                 Text("Nothing was guessed. Anything the source didn't give is left blank for you to fill in or leave.")
                                     .font(Theme.body(15, relativeTo: .subheadline))
                                     .foregroundStyle(.secondary)
+                            }
+                            if let link = draft.sourceURL.flatMap(URL.init(string:)), draft.aiNote != nil {
+                                Link(destination: link) {
+                                    Label("Open the original page", systemImage: "safari")
+                                        .font(Theme.body(15, bold: true, relativeTo: .subheadline))
+                                }
+                                .accessibilityIdentifier("reviewOpenSource")
+                            }
+                            if let onRedo {
+                                Button(action: onRedo) {
+                                    Label(draft.sourceURL == nil ? "Write a different one" : "Find a different one",
+                                          systemImage: "arrow.counterclockwise")
+                                        .font(Theme.body(15, bold: true, relativeTo: .subheadline))
+                                }
+                                .buttonStyle(.borderless)
+                                .padding(.top, 2)
+                                .accessibilityIdentifier("reviewRedo")
                             }
                             if !draft.notInSource.isEmpty {
                                 Text("Not in the source: \(draft.notInSource.joined(separator: ", ")).")

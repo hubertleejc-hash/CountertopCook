@@ -61,6 +61,18 @@ enum LinkImport {
         }
     }
 
+    /// The recipe card (schema.org Recipe) published at `url`, exactly as the page gives it; nil
+    /// when the page can't be loaded or has no complete card. Used for pages Gemini found.
+    static func recipeCard(at url: URL) async -> RecipeDraft? {
+        guard !isSocial(url), YouTubePage.videoID(from: url) == nil, let fetched = try? await fetch(url) else { return nil }
+        let (html, page) = fetched
+        guard !isSocial(page), YouTubePage.videoID(from: page) == nil,
+              let imported = try? RecipeImporter.parse(html: html, url: page), complete(imported) else { return nil }
+        var draft = RecipeDraft(imported: imported, sourceURL: page.absoluteString, sourceName: imported.siteName)
+        draft.coverImage = await photo(at: imported.imageURL)
+        return draft
+    }
+
     // MARK: Captions (TikTok, Instagram, Facebook…)
 
     private static let socialHosts = ["tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
@@ -95,7 +107,7 @@ enum LinkImport {
         guard let app = videoApp(url) else { return nil }
         var draft = RecipeDraft(imported: TextRecipeParser.parse(""), sourceURL: url.absoluteString, sourceName: app.name)
         draft.emptyReason = "\(app.name) doesn't let other apps read its posts from a link. To get the recipe, "
-            + app.save + ". If it won't save, screen-record it while it plays (Control Center → Screen Recording). Then come back and choose Import a saved video: "
+            + app.save + ". If it won't save, screen-record it while it plays (Control Center → Screen Recording). Then come back to Hearth, choose Import a saved video and tap Read my newest saved video: "
             + (OnlineVideoReader.hasKey ? "Gemini watches it and writes out the recipe."
                                         : "Hearth reads its subtitles and listens to it.")
         return draft
@@ -132,7 +144,7 @@ enum LinkImport {
                 draft.emptyReason = "This post's caption doesn't list the ingredients and steps. " + why
             } else {
                 draft.emptyReason = savedVideoDraft(page)?.emptyReason.map { "This post's caption doesn't give the recipe. " + $0 }
-                    ?? "This post's caption doesn't give the recipe. Save the video, or screen-record it while it plays, then choose Import a saved video: Hearth listens to it and reads its subtitles."
+                    ?? "This post's caption doesn't give the recipe. Save the video, or screen-record it while it plays, then choose Import a saved video and tap Read my newest saved video: Hearth listens to it and reads its subtitles."
             }
         }
         draft.coverImage = await photo(at: RecipeImporter.imageURL(nil, html: html, page: page))
@@ -261,6 +273,7 @@ enum LinkImport {
                         imported.ingredients = watched.ingredients
                         imported.steps = watched.steps
                         imported.servings = watched.servings ?? imported.servings
+                        imported.totalMinutes = watched.totalMinutes ?? imported.totalMinutes
                         if imported.title.isEmpty { imported.title = watched.title }
                         readBy = "Gemini (Google), from the video"
                     } else if !anything(imported) {

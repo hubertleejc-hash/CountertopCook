@@ -193,6 +193,12 @@ struct RecipeDraft: Equatable {
     /// Import review only: who wrote the recipe out when the source only said it in prose
     /// ("Apple Intelligence, from what the video says"), so the review screen can say so.
     var readBy: String?
+    /// Create with AI only: which model wrote this new recipe ("Gemini", "Apple Intelligence"),
+    /// so the review screen can say it was invented, not read from a source.
+    var createdBy: String?
+    /// Create with AI only: what the review screen should say about where this recipe came from
+    /// (found online and copied, written from a page, or written because nothing was found).
+    var aiNote: String?
     /// Import only: why no recipe could be found, for the "couldn't find it" screen.
     var emptyReason: String?
 
