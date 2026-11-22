@@ -297,10 +297,13 @@ final class CountertopCookUITests: XCTestCase {
         chooseAdd("menuCreateAI", titled: "Create with AI")
         let idea = element("createIdea")
         XCTAssertTrue(idea.waitForExistence(timeout: 5), "Create with AI didn't open")
-        XCTAssertFalse(element("createGo").isEnabled, "Create is possible with an empty request")
-        XCTAssertTrue(element("createSearchOnline").exists, "No way to find a real recipe online with Gemini")
+        // On the closed Duo the button sits below the fold, so the form is scrolled to it first.
+        XCTAssertTrue(scrollTo("createSearchOnline").exists, "No way to find a real recipe online with Gemini")
+        XCTAssertFalse(scrollTo("createGo").isEnabled, "Create is possible with an empty request")
         // The example chips fill the request (and avoid typing Chinese on the test keyboard).
-        app.buttons["番茄炒蛋"].firstMatch.tap()
+        let chip = app.buttons["番茄炒蛋"].firstMatch
+        for _ in 0..<6 where !(chip.exists && chip.isHittable) { app.swipeDown() }
+        chip.tap()
         snapshot("create-ai")
         scrollTo("createGo").tap()
 
