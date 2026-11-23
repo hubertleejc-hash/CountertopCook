@@ -1,0 +1,25 @@
+Test Case '-[CountertopCookUITests.CountertopCookUITests testAddRecipeCookThroughAllStepsAndFinish]' passed (243.455 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testCreateWithAIIsReviewedBeforeSaving]' passed (133.109 seconds).
+COLOUR: dark library background at (6.0, 306.0) = #1C1712, want #1C1712
+COLOUR: plain cover at (106.0, 410.79999389648435) = #1B2F4A, want #1B2F4A
+COLOUR: dark book page at (28.0, 228.0) = #2E2720, want #2E2720
+COLOUR: dark Cook Mode at (14.0, 264.1666666666667) = #1C1712, want #1C1712
+COLOUR: light library background at (6.0, 306.0) = #FDF6E9, want #FDF6E9
+Test Case '-[CountertopCookUITests.CountertopCookUITests testDarkModeColours]' passed (53.364 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testImportFromLink]' passed (114.183 seconds).
+CARDS: landscape-step2 recipe=(81.75, 20.0, 329.25, 342.0) timers=(463.0, 20.0, 329.0, 342.0)
+CARDS: landscape-step3 recipe=(81.75, 20.0, 329.25, 342.0) timers=(463.0, 20.0, 329.0, 342.0)
+POSE: landscape-step3 last ingredient (82.0, 233.99999999999994, 329.0, 44.0) back=(82.0, 306.0, 118.33333333333334, 56.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (322.749 seconds).
+FILTERS: favourites=(286.0, 234.0, 36.0, 36.0) add=(338.0, 176.0, 44.0, 44.0) cart=(284.0, 176.0, 44.0, 44.0) window=(0.0, 0.0, 402.0, 874.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLibraryFilterRowAndButtonsFit]' passed (22.039 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testOpenPortraitShowsWholeLongStep]' passed (80.143 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving]' passed (79.926 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPoseGallery]' skipped (7.908 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testRecipeOpensAsBookAndKeepsNotes]' passed (48.868 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testServingsRescaleIngredients]' passed (24.543 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testStartupPageThenLibrary]' passed (26.539 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTenStarterRecipesAndDelete]' passed (84.156 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testToBuyListCombinesRecipesAndChecksOff]' passed (111.133 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTwoTimersKeepCountingAcrossSteps]' passed (42.945 seconds).
+** TEST EXECUTE SUCCEEDED **

@@ -1,0 +1,30 @@
+Test Case '-[CountertopCookUITests.CountertopCookUITests testAddRecipeCookThroughAllStepsAndFinish]' passed (212.133 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testCreateWithAIIsReviewedBeforeSaving]' passed (128.978 seconds).
+COLOUR: dark library background at (6.0, 276.0) = #1C1712, want #1C1712
+COLOUR: plain cover at (95.25, 372.15) = #1B2F4A, want #1B2F4A
+COLOUR: dark book page at (32.0, 198.0) = #2E2720, want #2E2720
+COLOUR: dark Cook Mode at (22.0, 292.25) = #1C1712, want #1C1712
+COLOUR: light library background at (6.0, 276.0) = #FDF6E9, want #FDF6E9
+Test Case '-[CountertopCookUITests.CountertopCookUITests testDarkModeColours]' passed (57.808 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testImportFromLink]' passed (122.339 seconds).
+CARDS: landscape-step2 recipe=(27.75, 60.0, 626.25, 924.0) timers=(722.0, 60.0, 626.0, 924.0)
+CARDS: landscape-step3 recipe=(27.75, 60.0, 626.25, 924.0) timers=(722.0, 60.0, 626.0, 924.0)
+POSE: landscape-step3 last ingredient (28.0, 763.0, 626.0, 44.0) back=(28.0, 908.0, 118.0, 76.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLayoutKeepsTimersVisibleAndCentreLineClear]' passed (303.017 seconds).
+FILTERS: favourites=(386.0, 204.0, 119.5, 36.0) add=(968.0, 146.0, 44.0, 44.0) cart=(914.0, 146.0, 44.0, 44.0) window=(0.0, 0.0, 1032.0, 1376.0)
+Test Case '-[CountertopCookUITests.CountertopCookUITests testLibraryFilterRowAndButtonsFit]' passed (14.830 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testOpenPortraitShowsWholeLongStep]' passed (71.903 seconds).
+/Users/runner/work/CountertopCook/CountertopCook/UITests/CountertopCookUITests.swift:879: error: -[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving] : XCTAssertTrue failed - ingredientName_0 not found on screen
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving]' failed (85.702 seconds).
+/Users/runner/work/CountertopCook/CountertopCook/UITests/CountertopCookUITests.swift:879: error: -[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving] : XCTAssertTrue failed - ingredientName_0 not found on screen
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPastedTextIsReviewedBeforeSaving]' failed (84.389 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testPoseGallery]' skipped (11.043 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testRecipeOpensAsBookAndKeepsNotes]' passed (53.238 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testServingsRescaleIngredients]' passed (29.919 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testStartupPageThenLibrary]' passed (34.785 seconds).
+/Users/runner/work/CountertopCook/CountertopCook/UITests/CountertopCookUITests.swift:196: error: -[CountertopCookUITests.CountertopCookUITests testTenStarterRecipesAndDelete] : XCTAssertTrue failed - No Delete in the book's long-press menu
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTenStarterRecipesAndDelete]' failed (98.054 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTenStarterRecipesAndDelete]' passed (112.718 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testToBuyListCombinesRecipesAndChecksOff]' passed (148.261 seconds).
+Test Case '-[CountertopCookUITests.CountertopCookUITests testTwoTimersKeepCountingAcrossSteps]' passed (53.963 seconds).
+** TEST EXECUTE FAILED **
